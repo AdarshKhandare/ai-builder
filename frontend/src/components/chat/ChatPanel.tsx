@@ -26,6 +26,12 @@
  *    newline behaviour because there is no `<textarea>`.
  *  - Header style updated to match the design system ("uppercase
  *    tracking-wider text-xs font-mono text-muted-foreground").
+ *
+ * 2026-07-04 (Phase 4 — chat iteration):
+ *  - `mode` prop: `"generation"` vs `"iteration"`. Drives the input
+ *    placeholder ("Describe what you want to build…" vs "Ask for
+ *    changes…") and the streaming-status copy ("Planning…" /
+ *    "Generating…" / "Iterating…").
  */
 import {
   useEffect,
@@ -46,6 +52,14 @@ interface Message {
   content: string
 }
 
+/**
+ * Two prompt-mode semantics for the chat input.
+ *  - `generation` — first-time build: send goes to `/api/generate`.
+ *  - `iteration`  — follow-up turn: send goes to `/api/iterate`
+ *                    with the current code + history.
+ */
+export type ChatMode = 'generation' | 'iteration'
+
 interface ChatPanelProps {
   messages: Message[]
   onSend: (prompt: string) => void
@@ -58,6 +72,12 @@ interface ChatPanelProps {
    * compact behaviour for any caller that doesn't opt in.
    */
   fullWidth?: boolean
+  /**
+   * Drives the input placeholder and the streaming-status text.
+   * `"generation"` (default) shows the "describe your app" copy;
+   * `"iteration"` shows the "ask for changes" copy.
+   */
+  mode?: ChatMode
 }
 
 /**
@@ -84,6 +104,7 @@ export function ChatPanel({
   isStreaming,
   status,
   fullWidth = false,
+  mode = 'generation',
 }: ChatPanelProps) {
   const [input, setInput] = useState('')
   const scrollAnchorRef = useRef<HTMLDivElement>(null)
@@ -174,7 +195,26 @@ export function ChatPanel({
       ? 'Planning…'
       : status === 'generating'
         ? 'Generating…'
-        : 'Thinking…'
+        : status === 'iterating'
+          ? 'Iterating…'
+          : 'Thinking…'
+
+  /**
+   * Placeholder text — switches between the "first build" and the
+   * "ask for changes" copy based on `mode`. When `fullWidth` is
+   * `true` we use a slightly longer, hero-style prompt; otherwise
+   * the compact default. The text doesn't change with `isStreaming`
+   * — the user can still see what the input would do once the
+   * current run finishes.
+   */
+  const placeholder =
+    mode === 'iteration'
+      ? fullWidth
+        ? 'Ask for changes…'
+        : 'Ask for changes…'
+      : fullWidth
+        ? 'Describe the app you want to build…'
+        : 'Describe your app...'
 
   const canSend = input.trim().length > 0 && !isStreaming
   const showScrollLock = isStreaming && !isAtBottom && messages.length > 0
@@ -278,11 +318,7 @@ export function ChatPanel({
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={
-              fullWidth
-                ? 'Describe the app you want to build…'
-                : 'Describe your app...'
-            }
+            placeholder={placeholder}
             disabled={isStreaming}
             className="bg-background-sunken"
             aria-label="Prompt input"

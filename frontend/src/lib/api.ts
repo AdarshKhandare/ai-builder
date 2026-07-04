@@ -1,10 +1,10 @@
 /**
  * Backend API client.
  *
- * The FastAPI backend exposes two endpoints used by the builder:
+ * The FastAPI backend exposes these endpoints used by the builder:
  *
- * - `GET  /api/health` — service status + available model catalog.
- * - `POST /api/generate` — streams a Server-Sent Events (SSE) response
+ * - `GET  /api/health`   — service status + available model catalog.
+ * - `POST /api/generate`  — streams a Server-Sent Events (SSE) response
  *   shaped as a sequence of JSON frames:
  *
  *       data: {"type":"status","content":"planning"}\n\n
@@ -13,6 +13,19 @@
  *       data: {"type":"code","content":"<html chunk>"}\n\n   (N chunks)
  *       data: {"type":"done"}\n\n
  *       data: {"type":"error","message":"..."}\n\n          (on failure)
+ *
+ * - `POST /api/iterate`   — streams a chat-style SSE response where the
+ *   entire current code is re-emitted (not a diff) under `code` events.
+ *   Used for "ask for changes" follow-up turns:
+ *
+ *       data: {"type":"status","content":"iterating"}\n\n
+ *       data: {"type":"code","content":"<full code>"}\n\n    (N chunks)
+ *       data: {"type":"done"}\n\n
+ *       data: {"type":"error","message":"..."}\n\n          (on failure)
+ *
+ *   Note: iterate does NOT emit a `title` event — the project's title
+ *   is already set from the first generation. The streamed `code`
+ *   events REPLACE the previous code entirely, not append to it.
  *
  * In dev, Vite proxies `/api/*` to `http://localhost:8000` (see
  * `vite.config.ts`), so we always use relative URLs.
@@ -45,9 +58,28 @@ export type SSEEvent =
   | { type: 'done' }
   | { type: 'error'; message: string }
 
+/** A single turn in the chat history sent to `/api/iterate`. */
+export interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
 /** Body sent to `POST /api/generate`. */
 export interface GenerateRequest {
   prompt: string
+  /** OpenCode Go model ID, e.g. `opencode-go/minimax-m3`. */
+  model?: string
+}
+
+/** Body sent to `POST /api/iterate`. */
+export interface IterateRequest {
+  prompt: string
+  /** The full code currently in the editor — sent verbatim so the
+   *  model can produce the next revision against the latest state. */
+  current_code: string
+  /** Conversation history excluding the current `prompt`. The
+   *  backend appends the current prompt itself. */
+  history: ChatMessage[]
   /** OpenCode Go model ID, e.g. `opencode-go/minimax-m3`. */
   model?: string
 }
@@ -132,6 +164,100 @@ export async function* generateStream(
 
       for (const frame of frames) {
         const line = frame.trim()
+        if (!line.startsWith('data:')) continue
+
+        const data = line.slice(5).trim()
+        if (!data) continue
+
+        try {
+          const parsed = JSON.parse(data) as SSEEvent
+          yield parsed
+        } catch {
+          // Malformed frame — skip rather than abort the whole stream.
+        }
+      }
+    }
+  } finally {
+    try {
+      reader.releaseLock()
+    } catch {
+      // Reader may already be released on abort; ignore.
+    }
+  }
+}
+
+/**
+ * Stream an iteration on top of existing code.
+ *
+ * Used for the "ask for changes" follow-up flow. Yields parsed
+ * {@link SSEEvent} frames in the same shape as {@link generateStream}
+ * (status → N code chunks → done, or error). The backend emits the
+ * full updated code as `code` events — the client should REPLACE the
+ * previous code, not append to it.
+ *
+ * Like `generateStream`, malformed frames are silently skipped and
+ * the caller may cancel via the optional `signal`.
+ *
+ * @param prompt       The follow-up instruction (e.g. "make the hero blue").
+ * @param currentCode  The full code currently in the editor. The
+ *                     backend will revise against this snapshot.
+ * @param history      Chat history up to but not including the current
+ *                     prompt. The backend appends the current prompt.
+ * @param model        Optional model ID. Defaults to the backend's
+ *                     `opencode-go/minimax-m3`.
+ * @param signal       Optional `AbortSignal` to cancel the request.
+ */
+export async function* iterateStream(
+  prompt: string,
+  currentCode: string,
+  history: ChatMessage[],
+  model?: string,
+  signal?: AbortSignal,
+): AsyncGenerator<SSEEvent, void, void> {
+  const res = await fetch('/api/iterate', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+    },
+    body: JSON.stringify({
+      prompt,
+      current_code: currentCode,
+      history,
+      model,
+    } satisfies IterateRequest),
+    signal,
+  })
+
+  if (!res.ok) {
+    throw new Error(`Iterate failed: ${res.status} ${res.statusText}`)
+  }
+  if (!res.body) {
+    throw new Error('Iterate failed: response has no body')
+  }
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+
+      // SSE events are separated by a blank line. Split, keep the
+      // last (possibly incomplete) chunk in the buffer for the next
+      // iteration, and process the completed events.
+      const frames = buffer.split('\n\n')
+      buffer = frames.pop() ?? ''
+
+      for (const frame of frames) {
+        // SSE spec: lines that start with `:` are comments
+        // (e.g. `: keepalive`) — skip them.
+        const line = frame.trim()
+        if (line.startsWith(':')) continue
         if (!line.startsWith('data:')) continue
 
         const data = line.slice(5).trim()

@@ -362,3 +362,244 @@ describe('useSSE() — load()', () => {
     hanging.close()
   })
 })
+
+/* ------------------------------------------------------------------ */
+/* useSSE() — iterate()                                                */
+/*                                                                     */
+/* The iterate() method is the Phase 4 "chat follow-up" flow. It uses  */
+/* a FRESH `code` buffer (the backend re-emits the full updated code,  */
+/* not a diff), preserves `title` (iterate never emits one), and      */
+/* tracks the same done/error/isStreaming flags as `start()`.          */
+/* ------------------------------------------------------------------ */
+
+describe('useSSE() — iterate() lifecycle', () => {
+  it('test_iterate_exposes_method — result.iterate is a function', () => {
+    vi.stubGlobal('fetch', vi.fn())
+
+    const { result } = renderHook(() => useSSE())
+
+    expect(typeof result.current.iterate).toBe('function')
+  })
+
+  it('test_iterate_replaces_code — code is cleared to a fresh buffer, then accumulated from chunks', async () => {
+    // Regression: the old behaviour was to append. The backend, however,
+    // re-emits the FULL updated code on every iteration — so the hook
+    // must start from a fresh buffer and append to it, otherwise the
+    // final code would be (old + new) concatenated.
+    const events: SSEEvent[] = [
+      { type: 'status', content: 'iterating' },
+      { type: 'code', content: '<h1>' },
+      { type: 'code', content: 'BLUE</h1>' },
+      { type: 'done' },
+    ]
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockSSEStream(events)))
+
+    const { result } = renderHook(() => useSSE())
+
+    await act(async () => {
+      await result.current.iterate({
+        prompt: 'make the hero blue',
+        currentCode: '<h1>red</h1>',
+        history: [],
+      })
+    })
+
+    // Final code is the new (replacement) code, NOT old + new.
+    expect(result.current.code).toBe('<h1>BLUE</h1>')
+  })
+
+  it('test_iterate_preserves_title — title from a previous generation is NOT cleared', async () => {
+    // Run a generation that emits a title, then an iterate. The title
+    // should survive the iterate (iterate does not emit title events,
+    // and the hook must not blank the field).
+    const generationEvents: SSEEvent[] = [
+      { type: 'title', content: 'My Coffee Shop' },
+      { type: 'code', content: '<h1>red</h1>' },
+      { type: 'done' },
+    ]
+    const iterateEvents: SSEEvent[] = [
+      { type: 'code', content: '<h1>blue</h1>' },
+      { type: 'done' },
+    ]
+    let callIndex = 0
+    const fetchMock = vi.fn().mockImplementation(() => {
+      callIndex += 1
+      if (callIndex === 1) return Promise.resolve(mockSSEStream(generationEvents))
+      return Promise.resolve(mockSSEStream(iterateEvents))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result } = renderHook(() => useSSE())
+
+    await act(async () => {
+      await result.current.start('a coffee shop')
+    })
+    expect(result.current.title).toBe('My Coffee Shop')
+
+    await act(async () => {
+      await result.current.iterate({
+        prompt: 'make hero blue',
+        currentCode: '<h1>red</h1>',
+        history: [],
+      })
+    })
+
+    expect(result.current.title).toBe('My Coffee Shop')
+    expect(result.current.code).toBe('<h1>blue</h1>')
+  })
+
+  it('test_iterate_sets_iterating_status — status is "iterating" during the run', async () => {
+    const hanging = mockHangingSSEStream()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(hanging.response))
+
+    const { result } = renderHook(() => useSSE())
+
+    expect(result.current.status).toBeNull()
+
+    await act(async () => {
+      void result.current.iterate({
+        prompt: 'tweak',
+        currentCode: '<h1>x</h1>',
+        history: [],
+      })
+    })
+
+    // `iterate` sets status to 'iterating' synchronously, BEFORE the
+    // first SSE event arrives.
+    expect(result.current.status).toBe('iterating')
+    expect(result.current.isStreaming).toBe(true)
+
+    hanging.close()
+    await flush()
+  })
+
+  it('test_iterate_handles_done_event — done becomes true and isStreaming resets', async () => {
+    const events: SSEEvent[] = [
+      { type: 'status', content: 'iterating' },
+      { type: 'code', content: '<h1>blue</h1>' },
+      { type: 'done' },
+    ]
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockSSEStream(events)))
+
+    const { result } = renderHook(() => useSSE())
+
+    await act(async () => {
+      await result.current.iterate({
+        prompt: 'tweak',
+        currentCode: '<h1>x</h1>',
+        history: [],
+      })
+    })
+
+    expect(result.current.done).toBe(true)
+    expect(result.current.isStreaming).toBe(false)
+  })
+
+  it('test_iterate_handles_error_event — error is captured, streaming stops', async () => {
+    const events: SSEEvent[] = [
+      { type: 'status', content: 'iterating' },
+      { type: 'error', message: 'rate limited' },
+      { type: 'done' },
+    ]
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockSSEStream(events)))
+
+    const { result } = renderHook(() => useSSE())
+
+    await act(async () => {
+      await result.current.iterate({
+        prompt: 'tweak',
+        currentCode: '<h1>x</h1>',
+        history: [],
+      })
+    })
+
+    expect(result.current.error).toBe('rate limited')
+    expect(result.current.isStreaming).toBe(false)
+  })
+
+  it('test_iterate_sends_correct_payload — body has prompt, current_code, history, model', async () => {
+    // Capture the body of the fetch call so we can assert the wire
+    // format. The hook should forward prompt, currentCode, history,
+    // and model verbatim — the backend relies on this.
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        mockSSEStream([{ type: 'code', content: '<h1>x</h1>' }, { type: 'done' }]),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result } = renderHook(() => useSSE())
+
+    const history = [
+      { role: 'user' as const, content: 'build a hero' },
+      { role: 'assistant' as const, content: '<h1>red</h1>' },
+    ]
+    await act(async () => {
+      await result.current.iterate({
+        prompt: 'make it blue',
+        currentCode: '<h1>red</h1>',
+        history,
+        model: 'opencode-go/kimi-k2.6',
+      })
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/iterate')
+    expect(init.method).toBe('POST')
+    const body = JSON.parse(init.body as string) as Record<string, unknown>
+    expect(body).toEqual({
+      prompt: 'make it blue',
+      current_code: '<h1>red</h1>',
+      history,
+      model: 'opencode-go/kimi-k2.6',
+    })
+  })
+
+  it('test_iterate_aborts_previous_stream — starting iterate while another iterate is in flight aborts the first', async () => {
+    // Capture the AbortSignal from the first fetch call so we can
+    // confirm it is aborted when a second iterate() is started.
+    let firstSignal: AbortSignal | undefined
+    let callIndex = 0
+    const hanging1 = mockHangingSSEStream()
+    const hanging2 = mockHangingSSEStream()
+    const fetchMock = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+      callIndex += 1
+      const signal = init?.signal as AbortSignal | undefined
+      if (callIndex === 1) {
+        firstSignal = signal
+        return Promise.resolve(hanging1.response)
+      }
+      return Promise.resolve(hanging2.response)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result } = renderHook(() => useSSE())
+
+    await act(async () => {
+      void result.current.iterate({
+        prompt: 'first',
+        currentCode: '<h1>x</h1>',
+        history: [],
+      })
+    })
+
+    expect(firstSignal).toBeDefined()
+    expect(firstSignal?.aborted).toBe(false)
+
+    await act(async () => {
+      void result.current.iterate({
+        prompt: 'second',
+        currentCode: '<h1>x</h1>',
+        history: [],
+      })
+    })
+
+    // The first stream's signal must be aborted by the second iterate.
+    expect(firstSignal?.aborted).toBe(true)
+
+    hanging1.close()
+    hanging2.close()
+    await flush()
+  })
+})

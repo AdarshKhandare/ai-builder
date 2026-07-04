@@ -3,7 +3,13 @@
  *
  * The main app surface for Forge. Owns:
  *
- *   - The chat history (`messages`)
+ *   - The chat history (`messages`) — short assistant summaries for
+ *     the chat bubbles. The full code lives in the Code / Preview
+ *     panel and is not duplicated into the chat thread.
+ *   - The backend conversation history (`history`) — sent verbatim
+ *     to `/api/iterate` so the model can revise against the full
+ *     prior context. The assistant turn in `history` contains the
+ *     full final code, not the short summary shown in the chat.
  *   - The model catalog and currently-selected model
  *   - Timing of the active generation
  *   - Download (zip) of the latest generated code
@@ -13,6 +19,11 @@
  *   - The history-drawer open state + the currently-loaded project id
  *   - Auto-save to the backend when a generation completes
  *     (POST for new projects, PATCH for iterations on a loaded one)
+ *   - The `mode` flag ("generation" vs "iteration") — derived from
+ *     `code.length > 0 && !isStreaming`. When code is on screen and
+ *     no stream is in flight, the next send is a chat-style
+ *     `iterate()` follow-up. When no code exists yet, the next send
+ *     is a fresh `start()`.
  *
  * Renders the shared `TopBar` + `GenerationProgressBar` +
  * `PanelLayout(ChatPanel | CodePanel | PreviewPanel)` +
@@ -23,7 +34,14 @@ import JSZip from "jszip";
 import { toast } from "sonner";
 
 import { useSSE } from "@/hooks/useSSE";
-import { createProject, health, updateProject, type ModelInfo, type ProjectFull } from "@/lib/api";
+import {
+  createProject,
+  health,
+  updateProject,
+  type ChatMessage,
+  type ModelInfo,
+  type ProjectFull,
+} from "@/lib/api";
 import { TopBar } from "@/components/layout/TopBar";
 import { PanelLayout } from "@/components/layout/PanelLayout";
 import { StatusBar } from "@/components/layout/StatusBar";
@@ -39,11 +57,15 @@ import { Toaster } from "@/components/ui/sonner";
 /* Local types                                                         */
 /* ------------------------------------------------------------------ */
 
-/** A single chat turn (user prompt or assistant acknowledgement). */
+/** A single chat bubble (UI). Assistant content is a short summary;
+ *  the full code is in `history` and rendered in the Code panel. */
 interface Message {
   role: "user" | "assistant";
   content: string;
 }
+
+/** Two-mode prompt semantics — drives placeholder + send handler. */
+type BuilderMode = "generation" | "iteration";
 
 /**
  * Fallback model list used when the backend health endpoint is
@@ -84,6 +106,15 @@ const DEFAULT_MODEL_ID = "opencode-go/deepseek-v4-flash";
 export function Builder() {
   /* --- chat state ------------------------------------------------- */
   const [messages, setMessages] = useState<Message[]>([]);
+
+  /*
+   * Backend conversation history, sent verbatim to `/api/iterate`.
+   * The user-turn entries are the same as the `messages` list, but
+   * the assistant-turn entries contain the FULL final code (not the
+   * short chat-bubble summary) so the model has the complete prior
+   * context to revise against.
+   */
+  const [history, setHistory] = useState<ChatMessage[]>([]);
 
   /* --- model state ------------------------------------------------ */
   const [models, setModels] = useState<ModelInfo[]>([]);
@@ -126,12 +157,21 @@ export function Builder() {
   const [currentProjectId, setCurrentProjectId] = useState<number | null>(null);
 
   /* --- SSE -------------------------------------------------------- */
-  const { code, status, isStreaming, error, done, title, start, reset, load } = useSSE();
+  const { code, status, isStreaming, error, done, title, start, iterate, reset, load } = useSSE();
 
   // Tracks whether we've already surfaced the latest `error` event
   // to the chat + toast. SSE errors arrive as events (not thrown),
   // so we react via this effect.
   const lastErrorRef = useRef<string | null>(null);
+
+  /*
+   * Tracks the last kind of send ("start" for a fresh generation,
+   * "iterate" for a follow-up turn). Read by the `done` effect to
+   * pick the right assistant-bubble text ("Generated" vs "Updated")
+   * without us having to re-derive it from `code`/`messages`.
+   * Cleared by `handleNewProject`.
+   */
+  const lastActionRef = useRef<"start" | "iterate" | null>(null);
 
   /* --- on mount: load model catalog ------------------------------ */
   useEffect(() => {
@@ -193,20 +233,43 @@ export function Builder() {
     if (generationStart != null) {
       setGenerationTime(Date.now() - generationStart);
     }
+
+    /*
+     * Distinguish "first generation" from "iteration" so the chat
+     * bubble reads naturally for each flow.
+     */
+    const wasIterate = lastActionRef.current === "iterate";
+    const assistantContent = wasIterate
+      ? "Updated the app — changes are live in the panel."
+      : "Generated successfully — code is live in the panel.";
+
     setMessages((prev) => [
       ...prev,
-      {
-        role: "assistant",
-        content: "Generated successfully — code is live in the panel.",
-      },
+      { role: "assistant", content: assistantContent },
     ]);
+
+    /*
+     * Append the assistant turn to the backend `history`. We use the
+     * full final `code` (NOT the short chat summary) so the model
+     * has the complete prior context to revise against on the next
+     * iterate call.
+     *
+     * Skip when the run errored out — the assistant turn never
+     * produced a valid response, so adding it would poison future
+     * iterations. The error effect above already surfaces the
+     * failure to the user.
+     */
+    if (!error) {
+      setHistory((prev) => [...prev, { role: "assistant", content: code }]);
+    }
+
     // Progressive disclosure: the preview panel slides in now that
     // the latest run has produced actual code to render.
     setShowPreview(true);
     // Auto-switch to the Preview tab on the right column.
     setActiveTab("preview");
     setMobileTab("preview");
-    toast.success("Generation complete", {
+    toast.success(wasIterate ? "Update complete" : "Generation complete", {
       description: generationTime
         ? `Took ${(generationTime / 1000).toFixed(1)}s`
         : "Code is ready to preview and download.",
@@ -220,10 +283,11 @@ export function Builder() {
      * editor; if the save fails we just toast a warning.
      *
      * Closure values (`code`, `title`, `selectedModel`,
-     * `currentProjectId`, `messages`) are read at the moment `done`
-     * flips true. The deps array intentionally stays at `[done]`
-     * because we don't want to re-fire when any of these mutate
-     * post-completion (e.g. user toggles a tab, model picker).
+     * `currentProjectId`, `messages`, `history`) are read at the
+     * moment `done` flips true. The deps array intentionally stays
+     * at `[done]` because we don't want to re-fire when any of
+     * these mutate post-completion (e.g. user toggles a tab, model
+     * picker).
      */
     void (async () => {
       try {
@@ -266,23 +330,54 @@ export function Builder() {
     })();
 
     // We intentionally exclude `generationStart`, `generationTime`,
-    // `code`, `title`, `selectedModel`, `currentProjectId`, and
-    // `messages` from deps to avoid re-firing on every timing/state
-    // update; the guard is "this run just produced a `done` event".
+    // `code`, `title`, `selectedModel`, `currentProjectId`,
+    // `messages`, and `history` from deps to avoid re-firing on
+    // every timing/state update; the guard is "this run just
+    // produced a `done` event".
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [done]);
 
   /* --- handlers --------------------------------------------------- */
+
+  /*
+   * The mode flag is the key piece of state for Phase 4 chat
+   * iteration. "generation" sends to /api/generate; "iteration"
+   * sends to /api/iterate with the current `code` + `history`.
+   * The flag is derived rather than stored, so it can never go
+   * stale:
+   *
+   *   - If we have no code yet (or we just clicked "New project"),
+   *     the next send is generation.
+   *   - If we already have code on screen and aren't currently
+   *     streaming, the next send is iteration.
+   *   - While streaming, the input is disabled and the mode
+   *     question is moot (the streaming indicator is what the
+   *     user is looking at).
+   */
+  const mode: BuilderMode = !isStreaming && code.length > 0 ? "iteration" : "generation";
 
   const handleSend = useCallback(
     async (prompt: string): Promise<void> => {
       const trimmed = prompt.trim();
       if (!trimmed || isStreaming) return;
 
-      // Reset the timer for the new run and append the user turn.
+      // Recompute the mode at the moment of send so the branch
+      // below uses the most up-to-date value of `code` (rather
+      // than the `mode` captured in this callback's closure,
+      // which may be stale across re-renders).
+      const isIteration = code.length > 0;
+
+      // Reset the timer for the new run and append the user turn
+      // to BOTH the UI chat list and the backend history list.
       setGenerationStart(Date.now());
       setGenerationTime(null);
       setMessages((prev) => [...prev, { role: "user", content: trimmed }]);
+      setHistory((prev) => [...prev, { role: "user", content: trimmed }]);
+
+      // Mark which kind of send we're about to do so the `done`
+      // effect can pick the right assistant-bubble text and
+      // toast copy ("Generated" vs "Updated").
+      lastActionRef.current = isIteration ? "iterate" : "start";
 
       // Progressive disclosure: reveal the code panel as soon as the
       // user has committed to a prompt, so the streaming output
@@ -293,23 +388,37 @@ export function Builder() {
       setMobileTab("code");
 
       try {
-        await start(trimmed, selectedModel);
+        if (isIteration) {
+          // Chat-style follow-up: hand the backend the current
+          // code + full prior history so it can produce a
+          // revised version.
+          await iterate({
+            prompt: trimmed,
+            currentCode: code,
+            history,
+            model: selectedModel,
+          });
+        } else {
+          // Initial generation: no prior code or history to seed.
+          await start(trimmed, selectedModel);
+        }
       } catch (err) {
         // Network/abort errors. The SSE hook already populates
         // `error`; the error-effect above surfaces it.
         const message = err instanceof Error ? err.message : String(err);
         if (import.meta.env.DEV) {
           // eslint-disable-next-line no-console
-          console.warn("start() threw:", message);
+          console.warn(isIteration ? "iterate() threw:" : "start() threw:", message);
         }
       }
     },
-    [isStreaming, selectedModel, start],
+    [isStreaming, selectedModel, start, iterate, code, history],
   );
 
   const handleNewProject = useCallback((): void => {
     reset();
     setMessages([]);
+    setHistory([]);
     setGenerationStart(null);
     setGenerationTime(null);
     // Collapse the shell back to the "describe your app" hero —
@@ -321,6 +430,9 @@ export function Builder() {
     // Forget the current project — the next "done" event will
     // create a fresh row in the backend instead of updating one.
     setCurrentProjectId(null);
+    // Reset the action tracker so the next completion shows
+    // "Generated", not "Updated".
+    lastActionRef.current = null;
   }, [reset]);
 
   const handleDownload = useCallback((): void => {
@@ -369,6 +481,18 @@ export function Builder() {
         { role: "user", content: project.prompt },
         { role: "assistant", content: "Loaded from history — code is live in the panel." },
       ]);
+      /*
+       * Seed the backend `history` so the first iterate-after-load
+       * has the original prompt + code as its prior context. This
+       * is a best-effort reconstruction: the backend only persists
+       * the original `prompt` and final `code`, so we can only
+       * synthesize a single-turn history. Subsequent iterations
+       * will accumulate from here.
+       */
+      setHistory([
+        { role: "user", content: project.prompt },
+        { role: "assistant", content: project.code },
+      ]);
       // Restore the model selection.
       setSelectedModel(project.model);
       // Track which project is loaded (for save-on-done updates).
@@ -383,6 +507,10 @@ export function Builder() {
       // Reset timing (we don't have the original generation time).
       setGenerationStart(null);
       setGenerationTime(null);
+      // Reset the action tracker so the next completion (if any)
+      // shows "Updated", not "Generated" — the next send will be
+      // an iteration on top of the loaded code.
+      lastActionRef.current = null;
       toast.success("Project loaded", {
         description: project.title,
       });
@@ -431,6 +559,7 @@ export function Builder() {
               onSend={handleSend}
               isStreaming={isStreaming}
               status={status}
+              mode={mode}
               fullWidth={!showCode}
             />
           }
