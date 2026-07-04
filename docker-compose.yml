@@ -1,0 +1,25 @@
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: forge-api:latest
+    container_name: forge-api
+    ports:
+      - "8000:8000"
+    # Create this from backend/.env.example: cp backend/.env.example backend/.env
+    env_file:
+      - ./backend/.env
+    environment:
+      # Override DATABASE_URL so the SQLite file lives inside the
+      # mounted volume at /app/data, not at the image-level ./data path.
+      DATABASE_URL: sqlite+aiosqlite:///./data/forge.db
+    volumes:
+      - ./backend/data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health').read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

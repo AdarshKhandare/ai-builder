@@ -1,0 +1,75 @@
+/* ---------------------------------------------------------------------------
+ * Forge — scrollbar.css
+ *
+ * Custom dark scrollbars for WebKit and Firefox.
+ *
+ * Design intent (see docs/UI_DESIGN_DIRECTION.md §6 & §11):
+ *   - Thin (6px) so it never competes with the content
+ *   - Default track: transparent
+ *   - Default thumb: low-contrast border color
+ *   - Hover thumb: warm amber (--primary) — the "forge glow"
+ *   - No arrows, no jumpy resize, no light-mode overrides needed
+ *     (we force dark styling even in .light because the dev-tool
+ *     aesthetic is dark-first).
+ *
+ * Applies to:
+ *   - The whole document (html, body)
+ *   - Any element with the `scrollable` utility class (added in
+ *     index.css via @layer components)
+ * --------------------------------------------------------------------------- */
+
+/* WebKit + Blink (Chrome, Edge, Safari, Arc, etc.) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(0.26 0.015 260) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: oklch(0.26 0.015 260); /* --border */
+  border-radius: 9999px;
+  border: 0;
+  transition: background-color 150ms ease-out;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: oklch(0.75 0.16 70); /* --primary, the amber glow */
+}
+
+*::-webkit-scrollbar-thumb:active {
+  background-color: oklch(0.70 0.14 70); /* --accent, slightly deeper */
+}
+
+/* Corner where vertical & horizontal scrollbars meet */
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox — second declaration wins via the cascade, but keeping
+   it explicit here for clarity. Firefox uses scrollbar-color only. */
+html,
+body {
+  scrollbar-color: oklch(0.26 0.015 260) transparent;
+  scrollbar-width: thin;
+}
+
+html:hover,
+body:hover,
+*:hover {
+  scrollbar-color: oklch(0.75 0.16 70) transparent;
+}
+
+/* Reduce motion: kill the thumb color transition (no hover glow). */
+@media (prefers-reduced-motion: reduce) {
+  *::-webkit-scrollbar-thumb {
+    transition: none;
+  }
+}

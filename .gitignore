@@ -1,0 +1,61 @@
+# ─── Python ──────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# ─── Secrets / env ───────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ─── Data (SQLite DBs, uploads) ──────────────────────────────────────
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# ─── Logs ────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ─── IDE / OS ────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ─── Node (frontend later) ───────────────────────────────────────────
+node_modules/
+.next/
+out/
+.vite/
+dist/
+
+# ─── Docs / Markdown — ONLY root README.md is tracked ────────────────
+# All planning docs, AGENTS.md, memory.md, etc. stay local.
+docs/
+*.md
+!README.md
+/frontend/README.md
+
+# ─── Frontend build / cache ──────────────────────────────────────────
+frontend/dist/
+frontend/.vite/
+
+# ─── Backend local data ──────────────────────────────────────────────
+backend/data/

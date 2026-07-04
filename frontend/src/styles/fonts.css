@@ -1,0 +1,44 @@
+/* ---------------------------------------------------------------------------
+ * Forge — fonts.css
+ *
+ * The actual @font-face/Google Fonts <link> tag lives in index.html
+ * (preconnect + stylesheet link, with `display=swap` so text is
+ * visible during font load — see Section 5 of docs/UI_DESIGN_DIRECTION.md).
+ *
+ * This file is the single source of truth for the font-family
+ * custom-property names used by Tailwind v4 via @theme inline in
+ * index.css:
+ *
+ *   --font-display  → Bricolage Grotesque   (headings)
+ *   --font-body     → Figtree               (UI / body)
+ *   --font-mono     → Fragment Mono         (code)
+ *
+ * Variable-font ranges mirror the Google Fonts URL in index.html so
+ * weight changes are smooth (no FOUT on weight swaps).
+ *
+ * Tailwind utility mappings:
+ *   font-display  → class="font-display"   (h1..h6 via @layer base)
+ *   font-body     → class="font-body"      (body text via @layer base)
+ *   font-mono     → class="font-mono"      (<code>, <pre>, .font-mono)
+ * --------------------------------------------------------------------------- */
+
+:root {
+  /* Variable font ranges. These let the browser interpolate any
+     weight in the range without re-downloading a separate file. */
+  --font-display: 'Bricolage Grotesque', system-ui, -apple-system,
+    'Segoe UI', sans-serif;
+  --font-body: 'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Fragment Mono', ui-monospace, 'JetBrains Mono', 'Fira Code',
+    Consolas, monospace;
+}
+
+/* Variable-font weight ranges. Kept here (not in @theme inline) so
+   they are usable from any CSS file or inline style without going
+   through Tailwind. The numeric ranges match the Google Fonts URL
+   in index.html. */
+@supports (font-variation-settings: normal) {
+  :root {
+    --font-display-weights: 200 800;
+    --font-body-weights: 300 800;
+  }
+}
