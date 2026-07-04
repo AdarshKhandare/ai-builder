@@ -1,0 +1,64 @@
+# =============================================================================
+# Docker Compose PRODUCTION OVERRIDE for Forge AI Web-Builder
+# =============================================================================
+#
+# USAGE:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# This override is layered on top of the base docker-compose.yml.
+# It applies production-specific settings without breaking local dev.
+#
+# MULTI-PROJECT CONTEXT:
+#   This VPS (12 GB RAM) hosts 3-4 projects. Each project gets ~3 GB.
+#   Port convention: ai-builder=8000, project-2=8001, project-3=8002, etc.
+#   All bind to 127.0.0.1 (localhost only) — Nginx reverse-proxies to them.
+#
+# =============================================================================
+
+services:
+  api:
+    # ── Security: bind to localhost only ───────────────────────────────────
+    # The base compose.yml binds to 0.0.0.0:8000 (all interfaces).
+    # In production, only Nginx on the host should reach the backend.
+    # This override replaces the port binding.
+    # In Docker Compose override files, list values (ports) are REPLACED
+    # entirely by the override — not merged. So this replaces 8000:8000
+    # from the base file with the localhost-only binding.
+    ports:
+      - "127.0.0.1:8000:8000"
+
+    # ── Resource limits ────────────────────────────────────────────────────
+    # 12 GB RAM / 4 projects = ~3 GB per project.
+    # Prevents one project from OOM-killing others.
+    mem_limit: 3g
+    memswap_limit: 4g   # Allow 1 GB swap headroom
+
+    # ── Production environment ─────────────────────────────────────────────
+    environment:
+      ENVIRONMENT: production
+      # DATABASE_URL and OPENCODE_API_KEY come from backend/.env (env_file)
+      # ALLOWED_ORIGINS should be set in backend/.env for production
+
+    # ── Restart policy ─────────────────────────────────────────────────────
+    restart: unless-stopped
+
+    # ── Logging (prevent disk fill) ────────────────────────────────────────
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # ── Uvicorn tuning for production ──────────────────────────────────────
+    # Override the CMD to add workers. For AI workloads, the bottleneck is
+    # I/O (waiting for LLM API responses), not CPU. 2 workers is a good
+    # balance for 2 OCPUs. Increase if you see request queuing.
+    command:
+      [
+        "uvicorn", "app.main:app",
+        "--host", "0.0.0.0",
+        "--port", "8000",
+        "--workers", "2",
+        "--limit-concurrency", "100",
+        "--timeout-keep-alive", "65"
+      ]

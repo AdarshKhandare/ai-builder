@@ -5,8 +5,10 @@ services:
       dockerfile: Dockerfile
     image: forge-api:latest
     container_name: forge-api
-    ports:
-      - "8000:8000"
+    # NOTE: No `ports` here — Docker Compose merges (not replaces) port lists
+    # from override files. Port bindings are defined per-environment:
+    #   Local dev:   docker compose -f docker-compose.yml -f docker-compose.local.yml up
+    #   Production:  docker compose -f docker-compose.yml -f docker-compose.prod.yml up
     # Create this from backend/.env.example: cp backend/.env.example backend/.env
     env_file:
       - ./backend/.env

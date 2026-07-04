@@ -1,0 +1,93 @@
+# =============================================================================
+# Forge AI Web-Builder — Backend Deployment Workflow
+# =============================================================================
+#
+# WHAT THIS DOES:
+#   On every push to `main`, SSH into the Oracle Cloud VPS and redeploy
+#   the backend Docker container with the latest code.
+#
+# PREREQUISITES — Set these GitHub Secrets:
+#   (Repo → Settings → Secrets and variables → Actions → New repository secret)
+#
+#   VPS_HOST      — Oracle VPS public IP address (e.g., 129.159.x.x)
+#   VPS_USER      — SSH username (e.g., ubuntu)
+#   VPS_SSH_KEY   — Full contents of the SSH private key
+#                    (from -----BEGIN OPENSSH PRIVATE KEY----- to
+#                     -----END OPENSSH PRIVATE KEY-----)
+#   VPS_PORT      — (Optional) SSH port. Defaults to 22 if not set.
+#
+# FRONTEND:
+#   The frontend deploys automatically via Vercel's GitHub integration.
+#   No workflow needed here for frontend deploys.
+#
+# ACTION VERSION:
+#   appleboy/ssh-action@v1 — latest release v1.2.5 (Jan 28, 2026)
+#   Source: https://github.com/appleboy/ssh-action
+#
+# =============================================================================
+
+name: Deploy Backend to Oracle VPS
+
+on:
+  push:
+    branches:
+      - main
+    # Only trigger when backend-related files change.
+    # Uncomment the paths filter if you want to skip deploys for
+    # frontend-only or docs-only changes:
+    # paths:
+    #   - 'backend/**'
+    #   - 'docker-compose.yml'
+    #   - 'docker-compose.prod.yml'
+    #   - 'deploy/**'
+
+jobs:
+  deploy-backend:
+    name: Deploy Backend via SSH
+    runs-on: ubuntu-latest
+    # Prevent concurrent deployments
+    concurrency:
+      group: deploy-backend
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Oracle VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || '22' }}
+          # Fail fast if any command returns non-zero
+          script: |
+            set -e
+
+            echo "=== Navigating to project directory ==="
+            cd /opt/ai-builder
+
+            echo "=== Pulling latest code ==="
+            git pull origin main
+
+            echo "=== Rebuilding and restarting containers ==="
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+
+            echo "=== Waiting for container to be healthy ==="
+            sleep 5
+
+            echo "=== Checking container status ==="
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+
+            echo "=== Health check ==="
+            curl -sf http://localhost:8000/api/health || {
+              echo "WARNING: Health check failed. Check logs:"
+              docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=20
+              exit 1
+            }
+
+            echo "=== Cleaning up old Docker images ==="
+            docker system prune -f
+
+            echo "=== Deployment complete ==="

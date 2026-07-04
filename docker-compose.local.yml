@@ -1,0 +1,17 @@
+# =============================================================================
+# Docker Compose LOCAL DEVELOPMENT override for Forge AI Web-Builder
+# =============================================================================
+#
+# USAGE:
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up
+#
+# This adds port binding for local development (0.0.0.0:8000).
+# The base docker-compose.yml has no ports — they're defined per-environment
+# because Docker Compose MERGES port lists from multiple files.
+#
+# =============================================================================
+
+services:
+  api:
+    ports:
+      - "8000:8000"
