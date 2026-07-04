@@ -4,14 +4,18 @@
  * Shared framer-motion variants, transition presets, and the
  * `useReducedMotionSafe` helper. Every component that animates
  * imports from here so the motion language is centralized and
- * matches the "Calm Precision" design system.
+ * matches the "Refined Dark" design system.
  *
  * All variants use ONLY `transform` and `opacity` — no `width`,
  * `height`, `top`, `left` — so they are GPU-composited and never
  * cause layout thrash.
  *
- * Importing from "framer-motion" because that is the installed
- * dependency in this project.
+ * Dark-theme motion notes:
+ *   - Slightly more generous spring damping for a "heavier" feel
+ *   - Glow effects use box-shadow transitions (not animated here,
+ *     handled by CSS `glow-pulse` keyframe)
+ *   - Fade distances unchanged — the dark bg makes opacity
+ *     transitions equally effective
  */
 
 import type { Transition, Variants } from 'framer-motion'
@@ -23,30 +27,33 @@ import type { Transition, Variants } from 'framer-motion'
  *   - spring-default  → general layout / panel transitions
  *   - gentleSpring    → reveals, page enters, soft motion
  *   - snappySpring    → button presses, tooltips, quick interactions
+ *
+ * Dark-theme tuning: damping slightly higher for a "settled" feel
+ * that matches the premium dark aesthetic.
  * --------------------------------------------------------------------------- */
 
 export const springTransition: Transition = {
   type: 'spring',
   stiffness: 400,
-  damping: 30,
+  damping: 32,
 }
 
 export const gentleSpring: Transition = {
   type: 'spring',
-  stiffness: 200,
-  damping: 25,
+  stiffness: 180,
+  damping: 28,
 }
 
 export const snappySpring: Transition = {
   type: 'spring',
   stiffness: 600,
-  damping: 35,
+  damping: 36,
 }
 
 /* ---------------------------------------------------------------------------
  * Duration / easing presets (for non-spring transitions)
  *
- * "Calm Precision" motion tokens:
+ * "Refined Dark" motion tokens:
  *   - Fast (150ms): micro-interactions, tooltips
  *   - Normal (200ms): standard enters, reveals
  *   - Slow (300ms): larger transitions, page enters
@@ -147,6 +154,18 @@ export const tabIndicator: Variants = {
   exit: { opacity: 0 },
 }
 
+/**
+ * glowEnter — for elements that should fade in with a subtle
+ * glow effect (e.g. primary CTA buttons on the landing page).
+ * The glow is achieved via a slightly larger initial scale on
+ * a pseudo-element; the actual glow is CSS `shadow-glow`.
+ */
+export const glowEnter: Variants = {
+  initial: { opacity: 0, scale: 0.95 },
+  animate: { opacity: 1, scale: 1 },
+  exit: { opacity: 0, scale: 0.97 },
+}
+
 /* ---------------------------------------------------------------------------
  * While-hover / while-tap presets
  *
@@ -154,6 +173,9 @@ export const tabIndicator: Variants = {
  * objects you spread onto a motion component's props. Example:
  *
  *   <motion.button {...buttonTap} className="...">Save</motion.button>
+ *
+ * Dark-theme note: hover scale slightly more subtle (1.01 not 1.02)
+ * to match the "calm density" aesthetic.
  * --------------------------------------------------------------------------- */
 
 export const buttonTap = {

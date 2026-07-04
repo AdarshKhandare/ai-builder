@@ -20,11 +20,16 @@
  * the project does not depend on `user-event`. `fireEvent` is
  * sufficient for the discrete click events the picker and
  * download button need.
+ *
+ * 2026-07-04 — the `Logo` now renders as a `react-router` `Link`,
+ * so we wrap every render in a `MemoryRouter` to provide the
+ * routing context.
  */
 import { fireEvent, render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
-import { TopBar } from './TopBar'
+import { TopBar, type TopBarProps } from './TopBar'
 import type { ModelInfo } from '@/lib/api'
 
 /* ------------------------------------------------------------------ */
@@ -58,12 +63,10 @@ const MODELS: ModelInfo[] = [
   },
 ]
 
-function noopHandlers(): {
-  onModelChange: (model: string) => void
-  onDownload: () => void
-  onHistoryOpen: () => void
-  onNewProject: () => void
-} {
+function noopHandlers(): Pick<
+  TopBarProps,
+  'onModelChange' | 'onDownload' | 'onHistoryOpen' | 'onNewProject'
+> {
   return {
     onModelChange: vi.fn(),
     onDownload: vi.fn(),
@@ -72,39 +75,49 @@ function noopHandlers(): {
   }
 }
 
+/**
+ * Render `<TopBar>` inside a `MemoryRouter` so the `Logo` (which is
+ * a `react-router` `Link`) has the routing context it needs. The
+ * initial URL is pinned to `/builder` because the TopBar is only
+ * ever mounted on the builder page in production.
+ */
+function renderTopBar(props: TopBarProps): ReturnType<typeof render> {
+  return render(
+    <MemoryRouter initialEntries={['/builder']}>
+      <TopBar {...props} />
+    </MemoryRouter>,
+  )
+}
+
 /* ------------------------------------------------------------------ */
 /* Tests                                                               */
 /* ------------------------------------------------------------------ */
 
 describe('TopBar() — model picker', () => {
   it('test_renders_picker_trigger — model picker trigger is in the DOM with the correct aria-label', () => {
-    render(
-      <TopBar
-        models={MODELS}
-        selectedModel="opencode-go/minimax-m3"
-        {...noopHandlers()}
-        projectTitle="Coffee Shop"
-        isStreaming={false}
-        hasContent={true}
-        hasDownload={true}
-      />,
-    )
+    renderTopBar({
+      models: MODELS,
+      selectedModel: 'opencode-go/minimax-m3',
+      ...noopHandlers(),
+      projectTitle: 'Coffee Shop',
+      isStreaming: false,
+      hasContent: true,
+      hasDownload: true,
+    })
 
     expect(screen.getByLabelText('Select model')).toBeInTheDocument()
   })
 
   it('test_renders_model_options_in_dropdown — both model names are visible in the picker', () => {
-    render(
-      <TopBar
-        models={MODELS}
-        selectedModel="opencode-go/minimax-m3"
-        {...noopHandlers()}
-        projectTitle=""
-        isStreaming={false}
-        hasContent={false}
-        hasDownload={false}
-      />,
-    )
+    renderTopBar({
+      models: MODELS,
+      selectedModel: 'opencode-go/minimax-m3',
+      ...noopHandlers(),
+      projectTitle: '',
+      isStreaming: false,
+      hasContent: false,
+      hasDownload: false,
+    })
 
     // Open the dropdown. Radix Select uses a portal; testing-library
     // finds the items by text inside the body.
@@ -119,17 +132,15 @@ describe('TopBar() — model picker', () => {
 
   it('test_calls_onModelChange_when_picking — picking a new model fires the callback', () => {
     const handlers = noopHandlers()
-    render(
-      <TopBar
-        models={MODELS}
-        selectedModel="opencode-go/minimax-m3"
-        {...handlers}
-        projectTitle=""
-        isStreaming={false}
-        hasContent={false}
-        hasDownload={false}
-      />,
-    )
+    renderTopBar({
+      models: MODELS,
+      selectedModel: 'opencode-go/minimax-m3',
+      ...handlers,
+      projectTitle: '',
+      isStreaming: false,
+      hasContent: false,
+      hasDownload: false,
+    })
 
     fireEvent.click(screen.getByLabelText('Select model'))
 
@@ -137,21 +148,21 @@ describe('TopBar() — model picker', () => {
     // not the selected model), so a single match is enough.
     fireEvent.click(screen.getByText('Qwen 3.7 Plus'))
 
-    expect(handlers.onModelChange).toHaveBeenCalledWith('opencode-go/qwen-3.7-plus')
+    expect(handlers.onModelChange).toHaveBeenCalledWith(
+      'opencode-go/qwen-3.7-plus',
+    )
   })
 
   it('test_groups_recommended_models — recommended models are surfaced under a "Recommended" label', () => {
-    render(
-      <TopBar
-        models={MODELS}
-        selectedModel="opencode-go/minimax-m3"
-        {...noopHandlers()}
-        projectTitle=""
-        isStreaming={false}
-        hasContent={false}
-        hasDownload={false}
-      />,
-    )
+    renderTopBar({
+      models: MODELS,
+      selectedModel: 'opencode-go/minimax-m3',
+      ...noopHandlers(),
+      projectTitle: '',
+      isStreaming: false,
+      hasContent: false,
+      hasDownload: false,
+    })
 
     fireEvent.click(screen.getByLabelText('Select model'))
 
@@ -164,17 +175,15 @@ describe('TopBar() — model picker', () => {
 
   it('test_no_recommended_group_when_none_recommended — drops the "Recommended" group when no model is flagged', () => {
     const noRecommended = MODELS.map((m) => ({ ...m, recommended: false }))
-    render(
-      <TopBar
-        models={noRecommended}
-        selectedModel="opencode-go/minimax-m3"
-        {...noopHandlers()}
-        projectTitle=""
-        isStreaming={false}
-        hasContent={false}
-        hasDownload={false}
-      />,
-    )
+    renderTopBar({
+      models: noRecommended,
+      selectedModel: 'opencode-go/minimax-m3',
+      ...noopHandlers(),
+      projectTitle: '',
+      isStreaming: false,
+      hasContent: false,
+      hasDownload: false,
+    })
 
     fireEvent.click(screen.getByLabelText('Select model'))
 
@@ -186,17 +195,15 @@ describe('TopBar() — model picker', () => {
   })
 
   it('test_shows_provider_in_dropdown_row — each row renders the provider as a secondary label', () => {
-    render(
-      <TopBar
-        models={MODELS}
-        selectedModel="opencode-go/minimax-m3"
-        {...noopHandlers()}
-        projectTitle=""
-        isStreaming={false}
-        hasContent={false}
-        hasDownload={false}
-      />,
-    )
+    renderTopBar({
+      models: MODELS,
+      selectedModel: 'opencode-go/minimax-m3',
+      ...noopHandlers(),
+      projectTitle: '',
+      isStreaming: false,
+      hasContent: false,
+      hasDownload: false,
+    })
 
     fireEvent.click(screen.getByLabelText('Select model'))
 
@@ -211,51 +218,45 @@ describe('TopBar() — model picker', () => {
 
 describe('TopBar() — download button', () => {
   it('test_disabled_when_no_code — download is disabled when hasDownload=false', () => {
-    render(
-      <TopBar
-        models={MODELS}
-        selectedModel="opencode-go/minimax-m3"
-        {...noopHandlers()}
-        projectTitle=""
-        isStreaming={false}
-        hasContent={false}
-        hasDownload={false}
-      />,
-    )
+    renderTopBar({
+      models: MODELS,
+      selectedModel: 'opencode-go/minimax-m3',
+      ...noopHandlers(),
+      projectTitle: '',
+      isStreaming: false,
+      hasContent: false,
+      hasDownload: false,
+    })
 
     const button = screen.getByLabelText('Download project as ZIP')
     expect(button).toBeDisabled()
   })
 
   it('test_disabled_while_streaming — download is disabled even with code, when streaming', () => {
-    render(
-      <TopBar
-        models={MODELS}
-        selectedModel="opencode-go/minimax-m3"
-        {...noopHandlers()}
-        projectTitle="My App"
-        isStreaming={true}
-        hasContent={true}
-        hasDownload={true}
-      />,
-    )
+    renderTopBar({
+      models: MODELS,
+      selectedModel: 'opencode-go/minimax-m3',
+      ...noopHandlers(),
+      projectTitle: 'My App',
+      isStreaming: true,
+      hasContent: true,
+      hasDownload: true,
+    })
 
     const button = screen.getByLabelText('Download project as ZIP')
     expect(button).toBeDisabled()
   })
 
   it('test_enabled_when_code_and_idle — download is enabled when there is code and no stream is running', () => {
-    render(
-      <TopBar
-        models={MODELS}
-        selectedModel="opencode-go/minimax-m3"
-        {...noopHandlers()}
-        projectTitle="My App"
-        isStreaming={false}
-        hasContent={true}
-        hasDownload={true}
-      />,
-    )
+    renderTopBar({
+      models: MODELS,
+      selectedModel: 'opencode-go/minimax-m3',
+      ...noopHandlers(),
+      projectTitle: 'My App',
+      isStreaming: false,
+      hasContent: true,
+      hasDownload: true,
+    })
 
     const button = screen.getByLabelText('Download project as ZIP')
     expect(button).not.toBeDisabled()
@@ -263,17 +264,15 @@ describe('TopBar() — download button', () => {
 
   it('test_calls_onDownload_on_click — click fires the download callback', () => {
     const handlers = noopHandlers()
-    render(
-      <TopBar
-        models={MODELS}
-        selectedModel="opencode-go/minimax-m3"
-        {...handlers}
-        projectTitle="My App"
-        isStreaming={false}
-        hasContent={true}
-        hasDownload={true}
-      />,
-    )
+    renderTopBar({
+      models: MODELS,
+      selectedModel: 'opencode-go/minimax-m3',
+      ...handlers,
+      projectTitle: 'My App',
+      isStreaming: false,
+      hasContent: true,
+      hasDownload: true,
+    })
 
     fireEvent.click(screen.getByLabelText('Download project as ZIP'))
     expect(handlers.onDownload).toHaveBeenCalledTimes(1)

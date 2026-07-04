@@ -5,13 +5,15 @@
  * tokens (see index.css) and by framer-motion variants in
  * src/lib/motion.ts.
  *
- * Design intent ("Calm Precision"):
+ * Design intent ("Refined Dark"):
  *   - Only animate `transform` and `opacity` (GPU-composited, cheap)
  *   - Respect `prefers-reduced-motion: reduce` — every animation is
  *     collapsed to its end state
  *   - No infinite animations on layout (only on the shimmer/pulse
  *     affordances where they are meaningful)
  *   - Subtle, purposeful motion — never decorative-only
+ *   - Glow animations use box-shadow for the dark-theme signature
+ *     blue glow on primary actions
  * --------------------------------------------------------------------------- */
 
 /* ─── shimmer ───────────────────────────────────────────────────────
@@ -54,10 +56,27 @@
 
 /* ─── pulse-subtle ──────────────────────────────────────────────────
    Gentle opacity pulse for "thinking" / streaming indicators.
-   Softer than the old amber pulse — matches the calm aesthetic. */
+   Matches the calm dark aesthetic. */
 @keyframes pulse-subtle {
   0%, 100% { opacity: 0.6; }
   50% { opacity: 1; }
+}
+
+/* ─── glow-pulse ────────────────────────────────────────────────────
+   Soft blue glow pulse for primary action buttons on dark.
+   Uses box-shadow with the refined blue primary color.
+   Signature "Refined Dark" touch — the forge glows. */
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 15px oklch(0.65 0.155 250 / 0.1); }
+  50% { box-shadow: 0 0 30px oklch(0.65 0.155 250 / 0.2); }
+}
+
+/* ─── gradient-shift ────────────────────────────────────────────────
+   Slow background-position shift for animated gradient backgrounds.
+   Used on the landing page hero for a subtle living background. */
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
 }
 
 /* ─── Reduced-motion overrides ──────────────────────────────────────

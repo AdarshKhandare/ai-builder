@@ -125,7 +125,7 @@ def _iterate_payload(
 
 
 async def test_iterate_streams_code(
-    client: AsyncClient,
+    auth_client: AsyncClient,
     mock_client: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -143,7 +143,7 @@ async def test_iterate_streams_code(
     """
     _patch_opencode_client(monkeypatch, mock_client)
 
-    response = await client.post("/api/iterate", json=_iterate_payload())
+    response = await auth_client.post("/api/iterate", json=_iterate_payload())
 
     assert (
         response.status_code == 200
@@ -167,7 +167,7 @@ async def test_iterate_streams_code(
 
 
 async def test_iterate_emits_iterating_status(
-    client: AsyncClient,
+    auth_client: AsyncClient,
     mock_client: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -184,7 +184,7 @@ async def test_iterate_emits_iterating_status(
     """
     _patch_opencode_client(monkeypatch, mock_client)
 
-    response = await client.post("/api/iterate", json=_iterate_payload())
+    response = await auth_client.post("/api/iterate", json=_iterate_payload())
     assert response.status_code == 200
 
     events = await _collect_sse_events(response)
@@ -206,7 +206,7 @@ async def test_iterate_emits_iterating_status(
     )
 
 
-async def test_iterate_validates_prompt(client: AsyncClient) -> None:
+async def test_iterate_validates_prompt(auth_client: AsyncClient) -> None:
     """Empty ``prompt`` is rejected with HTTP 422 (Pydantic validation).
 
     The schema declares ``min_length=1`` on ``prompt`` (mirroring
@@ -217,7 +217,7 @@ async def test_iterate_validates_prompt(client: AsyncClient) -> None:
         * HTTP 422 from FastAPI's request validation
         * The error body references the ``prompt`` field
     """
-    response = await client.post("/api/iterate", json=_iterate_payload(prompt=""))
+    response = await auth_client.post("/api/iterate", json=_iterate_payload(prompt=""))
 
     assert (
         response.status_code == 422
@@ -235,7 +235,7 @@ async def test_iterate_validates_prompt(client: AsyncClient) -> None:
     )
 
 
-async def test_iterate_validates_model(client: AsyncClient) -> None:
+async def test_iterate_validates_model(auth_client: AsyncClient) -> None:
     """Invalid model pattern is rejected with HTTP 422.
 
     The schema enforces ``r"^opencode-go/[a-z0-9._-]+$"`` on
@@ -246,7 +246,7 @@ async def test_iterate_validates_model(client: AsyncClient) -> None:
     Asserts:
         * HTTP 422 for an invalid model id
     """
-    response = await client.post(
+    response = await auth_client.post(
         "/api/iterate", json=_iterate_payload(model="minimax-m3")
     )
 
@@ -263,7 +263,7 @@ async def test_iterate_validates_model(client: AsyncClient) -> None:
     )
 
 
-async def test_iterate_validates_current_code(client: AsyncClient) -> None:
+async def test_iterate_validates_current_code(auth_client: AsyncClient) -> None:
     """Empty ``current_code`` is rejected with HTTP 422.
 
     Iteration without any code to iterate on is meaningless; the
@@ -273,7 +273,9 @@ async def test_iterate_validates_current_code(client: AsyncClient) -> None:
     Asserts:
         * HTTP 422 from FastAPI's request validation
     """
-    response = await client.post("/api/iterate", json=_iterate_payload(current_code=""))
+    response = await auth_client.post(
+        "/api/iterate", json=_iterate_payload(current_code="")
+    )
 
     assert response.status_code == 422, (
         f"Empty current_code should yield 422, got "
@@ -289,7 +291,7 @@ async def test_iterate_validates_current_code(client: AsyncClient) -> None:
 
 
 async def test_iterate_error_handling(
-    client: AsyncClient,
+    auth_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Upstream failures surface as a sanitised ``error`` SSE event.
@@ -332,7 +334,7 @@ async def test_iterate_error_handling(
 
     _patch_opencode_client(monkeypatch, error_mock)
 
-    response = await client.post("/api/iterate", json=_iterate_payload())
+    response = await auth_client.post("/api/iterate", json=_iterate_payload())
 
     # In-band error: status 200, error frame inside the stream.
     if response.status_code != 200:
@@ -364,7 +366,7 @@ async def test_iterate_error_handling(
 
 
 async def test_iterate_closes_client(
-    client: AsyncClient,
+    auth_client: AsyncClient,
     mock_client: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -382,7 +384,7 @@ async def test_iterate_closes_client(
     """
     _patch_opencode_client(monkeypatch, mock_client)
 
-    response = await client.post("/api/iterate", json=_iterate_payload())
+    response = await auth_client.post("/api/iterate", json=_iterate_payload())
     assert (
         response.status_code == 200
     ), f"Expected 200, got {response.status_code}: {response.text}"
@@ -396,7 +398,7 @@ async def test_iterate_closes_client(
 
 
 async def test_iterate_includes_history(
-    client: AsyncClient,
+    auth_client: AsyncClient,
     mock_client: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -429,7 +431,9 @@ async def test_iterate_includes_history(
         {"role": "user", "content": "previous turn 2"},
     ]
 
-    response = await client.post("/api/iterate", json=_iterate_payload(history=history))
+    response = await auth_client.post(
+        "/api/iterate", json=_iterate_payload(history=history)
+    )
     assert response.status_code == 200
 
     events = await _collect_sse_events(response)
@@ -487,7 +491,7 @@ async def test_iterate_includes_history(
 
 
 async def test_iterate_strips_model_prefix(
-    client: AsyncClient,
+    auth_client: AsyncClient,
     mock_client: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -506,7 +510,7 @@ async def test_iterate_strips_model_prefix(
     """
     _patch_opencode_client(monkeypatch, mock_client)
 
-    response = await client.post(
+    response = await auth_client.post(
         "/api/iterate", json=_iterate_payload(model="opencode-go/minimax-m3")
     )
     assert response.status_code == 200

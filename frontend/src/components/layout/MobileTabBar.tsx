@@ -95,13 +95,14 @@ export function MobileTabBar({ active, onChange, showPreview }: MobileTabBarProp
             }}
             disabled={isDisabled}
             className={cn(
-              'relative flex min-h-[48px] flex-1 flex-col items-center justify-center gap-0.5 transition-colors',
+              'relative flex min-h-[48px] flex-1 cursor-pointer flex-col items-center justify-center gap-0.5 transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               isActive
                 ? 'text-primary'
                 : isDisabled
                   ? 'text-muted-foreground/40'
                   : 'text-muted-foreground hover:text-foreground',
+              isDisabled && 'cursor-not-allowed',
             )}
           >
             <Icon

@@ -3,7 +3,7 @@ fastapi>=0.115,<0.121
 uvicorn[standard]>=0.30,<0.34
 python-multipart>=0.0.9,<0.1
 
-# HTTP client (used to call OpenCode Zen API)
+# HTTP client (used to call OpenCode Zen API and GitHub OAuth)
 httpx>=0.27,<0.29
 
 # Database (SQLite + async ORM)
@@ -13,3 +13,11 @@ sqlalchemy[asyncio]>=2.0,<2.1
 # Settings + validation
 pydantic>=2.7,<3.0
 pydantic-settings>=2.3,<3.0
+
+# Auth (Task 2): GitHub OAuth + JWT
+authlib>=1.3.0            # OAuth2 client (no flask/django deps)
+python-jose[cryptography]>=3.3.0  # JWT encode/decode (HS256)
+itsdangerous>=2.1.0       # Signed cookies / state nonce (OAuth)
+
+# Rate limiting (Task 3)
+slowapi>=0.1.10           # Per-route and global rate limits

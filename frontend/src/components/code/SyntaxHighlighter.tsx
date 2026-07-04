@@ -8,9 +8,9 @@
  * grammars over the full text on every update — too expensive for
  * a streaming code surface.
  *
- * Token colors follow the "Calm Precision" design system defined in
- * `index.css` (light, indigo accent):
- *   - keywords / tags (HTML)   → indigo (--primary)
+ * Token colors follow the "Refined Dark" design system defined in
+ * `index.css` (dark, refined blue accent):
+ *   - keywords / tags (HTML)   → refined blue (--primary)
  *   - strings / attributes     → green (--success)
  *   - comments                 → muted-foreground
  *   - tags                     → blue (--info)
@@ -22,15 +22,16 @@
  * outer container handles vertical scroll; the inner pre handles
  * horizontal overflow for long lines.
  *
- * 2026-07-04 (Phase 6 redesign) — light theme; keywords are indigo
- * (was amber), tags now blue (--info), function names use the deep
- * indigo (--accent-foreground) for visual distinction.
+ * 2026-07-04 (Refined Dark redesign) — dark theme; keywords are
+ * refined blue (--primary), tags use --info, function names use
+ * --accent-foreground for visual distinction.
  */
 import { Highlight, type PrismTheme } from 'prism-react-renderer'
 import { memo } from 'react'
 
-/** The custom theme — uses CSS custom properties from the design system. */
-const calmPrecisionTheme: PrismTheme = {
+/** The custom theme — uses CSS custom properties from the design system.
+ *  All colors are semantic tokens so they adapt to any theme change. */
+const forgeDarkTheme: PrismTheme = {
   plain: {
     color: 'var(--foreground)',
     backgroundColor: 'transparent',
@@ -131,7 +132,7 @@ function SyntaxHighlighterInner({
   showLineNumbers = true,
 }: SyntaxHighlighterProps) {
   return (
-    <Highlight code={code} language={language} theme={calmPrecisionTheme}>
+    <Highlight code={code} language={language} theme={forgeDarkTheme}>
       {({ className, style, tokens, getLineProps, getTokenProps }) => (
         <pre
           // `className` is prism-react-renderer's recommended class for

@@ -74,7 +74,7 @@ function TabButton({ id, label, active, onSelect, Icon }: TabButtonProps) {
       id={`code-preview-tab-${id}`}
       onClick={() => onSelect(id)}
       className={cn(
-        'relative flex h-8 items-center gap-1.5 rounded-t-md px-3 text-xs font-medium transition-colors',
+        'relative flex h-8 cursor-pointer items-center gap-1.5 rounded-t-md px-3 text-xs font-medium transition-colors',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         active
           ? 'text-foreground'

@@ -2,18 +2,24 @@
  * Forge — index.css
  *
  * The single source of truth for the Forge design system.
- * "Calm Precision" — light, clean, professional SaaS aesthetic.
- * Inspired by v0.dev, Linear, Lovable. NOT the old dark amber theme.
+ * "Refined Dark" — premium, calm, technical dark aesthetic.
+ * Inspired by Cursor, Linear, Raycast, Arc browser dark modes.
+ *
+ * Design direction (July 2026):
+ *   - Dark-first (dark is the ONLY mode; light may be added later)
+ *   - Warm charcoal base (NOT pure black — too harsh)
+ *   - Refined blue accent (NOT indigo, NOT amber, NOT purple)
+ *   - Elevation via lighter borders, NOT drop shadows
+ *   - Soft blue glow on primary actions
  *
  * Layer order (top to bottom):
  *   1. Tailwind + animate.css plugins
  *   2. Global styles (fonts, scrollbar, animations)
  *   3. @theme inline — bridges :root tokens → Tailwind utilities
- *   4. :root  — light-mode token values (default)
- *   5. .dark  — dark-mode token overrides
- *   6. @layer base     — element resets
- *   7. @layer components — small utility classes
- *   8. @layer utilities — opinionated one-off utilities
+ *   4. :root  — dark-mode token values (default & only mode)
+ *   5. @layer base     — element resets
+ *   6. @layer components — small utility classes
+ *   7. @layer utilities — opinionated one-off utilities
  * --------------------------------------------------------------------------- */
 
 @import 'tailwindcss';
@@ -26,9 +32,9 @@
 /* ---------------------------------------------------------------------------
  * Dark variant
  *
- * Light-first design system. The default (:root) is light.
- * Add `.dark` class to <html> to switch to dark mode.
- * The @custom-variant enables shadcn-style `dark:` utilities.
+ * Dark-first design system. The default (:root) is dark.
+ * The @custom-variant enables shadcn-style `dark:` utilities
+ * for compatibility with shadcn component internals.
  * --------------------------------------------------------------------------- */
 
 @custom-variant dark (&:is(.dark *));
@@ -38,7 +44,7 @@
  *
  * This makes `bg-primary`, `text-foreground`, `font-display`, etc.
  * resolve at the utility-class layer. Token VALUES are defined on
- * :root (light) and .dark below.
+ * :root below.
  * --------------------------------------------------------------------------- */
 
 @theme inline {
@@ -69,6 +75,7 @@
   --color-info: var(--info);
   --color-background-sunken: var(--background-sunken);
   --color-border-subtle: var(--border-subtle);
+  --color-primary-glow: var(--primary-glow);
 
   /* ─── Chart tokens (shadcn convention) ─── */
   --color-chart-1: var(--chart-1);
@@ -99,12 +106,16 @@
   --font-body: var(--font-body);
   --font-mono: var(--font-mono);
 
-  /* ─── Custom shadows ─── */
-  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.03);
-  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.05), 0 4px 6px -4px rgb(0 0 0 / 0.05);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.05), 0 8px 10px -6px rgb(0 0 0 / 0.05);
+  /* ─── Custom shadows (dark-optimised: very subtle, borders do the work) ─── */
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.2);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.25), 0 1px 2px -1px rgb(0 0 0 / 0.25);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.35), 0 4px 6px -4px rgb(0 0 0 / 0.35);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.4), 0 8px 10px -6px rgb(0 0 0 / 0.4);
+
+  /* ─── Glow shadows (primary accent glow for buttons) ─── */
+  --shadow-glow: 0 0 20px oklch(0.65 0.155 250 / 0.12);
+  --shadow-glow-lg: 0 0 40px oklch(0.65 0.155 250 / 0.2);
 
   /* ─── Custom animations ─── */
   --animate-shimmer: shimmer 2s ease-in-out infinite;
@@ -113,6 +124,8 @@
   --animate-slide-in: slide-in 0.2s ease-out;
   --animate-blink-cursor: blink-cursor 1s steps(2) infinite;
   --animate-pulse-subtle: pulse-subtle 2s ease-in-out infinite;
+  --animate-glow-pulse: glow-pulse 2.5s ease-in-out infinite;
+  --animate-gradient-shift: gradient-shift 8s ease infinite;
 
   @keyframes shimmer {
     0% { background-position: -200% 0; }
@@ -138,132 +151,89 @@
     0%, 100% { opacity: 0.6; }
     50% { opacity: 1; }
   }
+  @keyframes glow-pulse {
+    0%, 100% { box-shadow: 0 0 15px oklch(0.65 0.155 250 / 0.1); }
+    50% { box-shadow: 0 0 30px oklch(0.65 0.155 250 / 0.2); }
+  }
+  @keyframes gradient-shift {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
 }
 
 /* ---------------------------------------------------------------------------
- * :root — light mode (default)
+ * :root — dark mode (default & only mode)
  *
- * "Calm Precision" — white/near-white backgrounds, deep charcoal text,
- * indigo accent. All values in oklch for perceptual uniformity.
+ * "Refined Dark" — warm charcoal base, soft white text,
+ * refined blue accent. All values in oklch for perceptual uniformity.
+ *
+ * Elevation hierarchy (dark theme uses lighter borders, not shadows):
+ *   background (0.14) → card (0.18) → popover (0.21)
+ *   Each step is ~0.03-0.04 oklch lightness apart.
  * --------------------------------------------------------------------------- */
 
 :root {
   --radius: 0.5rem;
 
-  /* Core surfaces */
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.14 0.005 285);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.14 0.005 285);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.14 0.005 285);
+  /* Core surfaces — warm charcoal, NOT pure black */
+  --background: oklch(0.14 0.006 250);
+  --foreground: oklch(0.93 0.006 250);
+  --card: oklch(0.18 0.008 250);
+  --card-foreground: oklch(0.93 0.006 250);
+  --popover: oklch(0.21 0.01 250);
+  --popover-foreground: oklch(0.93 0.006 250);
 
-  /* Primary — indigo accent */
-  --primary: oklch(0.55 0.2 270);
+  /* Primary — refined blue. Calm, confident, technical.
+   * Not indigo (too purple), not cyan (too cold), not amber (rejected).
+   * oklch(0.65 0.155 250) ≈ #4d8ed6 — WCAG ~5.1:1 on --background. */
+  --primary: oklch(0.65 0.155 250);
   --primary-foreground: oklch(0.98 0 0);
 
-  /* Secondary — soft gray */
-  --secondary: oklch(0.96 0.005 285);
-  --secondary-foreground: oklch(0.2 0.005 285);
+  /* Secondary — slightly elevated surface for chips, badges */
+  --secondary: oklch(0.22 0.012 250);
+  --secondary-foreground: oklch(0.85 0.008 250);
 
-  /* Muted — subtle backgrounds */
-  --muted: oklch(0.97 0.003 285);
-  --muted-foreground: oklch(0.55 0.01 285);
+  /* Muted — subtle backgrounds and secondary text */
+  --muted: oklch(0.22 0.01 250);
+  --muted-foreground: oklch(0.58 0.015 250);
 
-  /* Accent — lighter indigo for hover states */
-  --accent: oklch(0.94 0.02 270);
-  --accent-foreground: oklch(0.3 0.05 270);
+  /* Accent — hover/active states, slightly tinted blue surface */
+  --accent: oklch(0.25 0.02 250);
+  --accent-foreground: oklch(0.90 0.015 250);
 
-  /* Destructive — red */
-  --destructive: oklch(0.55 0.22 25);
+  /* Destructive — red, slightly brightened for dark bg */
+  --destructive: oklch(0.62 0.22 25);
   --destructive-foreground: oklch(0.98 0 0);
 
-  /* Borders — subtle, not heavy */
-  --border: oklch(0.92 0.005 285);
-  --input: oklch(0.92 0.005 285);
-  --ring: oklch(0.55 0.2 270 / 0.3);
+  /* Borders — visible but not heavy. The primary elevation tool on dark. */
+  --border: oklch(0.28 0.014 250);
+  --input: oklch(0.25 0.012 250);
+  --ring: oklch(0.65 0.155 250 / 0.4);
 
   /* Extended — Forge-specific */
-  --success: oklch(0.6 0.17 155);
-  --warning: oklch(0.75 0.16 84);
-  --info: oklch(0.6 0.15 250);
-  --background-sunken: oklch(0.98 0.002 285);
-  --border-subtle: oklch(0.95 0.003 285);
+  --success: oklch(0.65 0.17 155);
+  --warning: oklch(0.78 0.16 84);
+  --info: oklch(0.65 0.15 250);
+  --background-sunken: oklch(0.11 0.006 250);
+  --border-subtle: oklch(0.21 0.01 250);
+  --primary-glow: oklch(0.65 0.155 250 / 0.15);
 
-  /* Chart palette */
-  --chart-1: oklch(0.55 0.2 270); /* indigo */
-  --chart-2: oklch(0.6 0.17 155); /* green */
-  --chart-3: oklch(0.6 0.15 250); /* blue */
-  --chart-4: oklch(0.55 0.22 25); /* red */
-  --chart-5: oklch(0.6 0.15 310); /* purple */
+  /* Chart palette — tuned for dark backgrounds */
+  --chart-1: oklch(0.65 0.155 250); /* refined blue */
+  --chart-2: oklch(0.65 0.17 155); /* green */
+  --chart-3: oklch(0.65 0.15 250); /* blue */
+  --chart-4: oklch(0.62 0.22 25); /* red */
+  --chart-5: oklch(0.65 0.15 310); /* purple */
 
   /* Sidebar */
-  --sidebar: oklch(0.99 0.002 285);
-  --sidebar-foreground: oklch(0.14 0.005 285);
-  --sidebar-primary: oklch(0.55 0.2 270);
+  --sidebar: oklch(0.16 0.008 250);
+  --sidebar-foreground: oklch(0.93 0.006 250);
+  --sidebar-primary: oklch(0.65 0.155 250);
   --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.96 0.005 285);
-  --sidebar-accent-foreground: oklch(0.2 0.005 285);
-  --sidebar-border: oklch(0.92 0.005 285);
-  --sidebar-ring: oklch(0.55 0.2 270 / 0.3);
-
-  color-scheme: light;
-}
-
-/* ---------------------------------------------------------------------------
- * .dark — dark mode token overrides
- *
- * Dark mode is secondary. Deep charcoal backgrounds, soft white text,
- * indigo accent (slightly brighter for contrast on dark).
- * --------------------------------------------------------------------------- */
-
-.dark {
-  --background: oklch(0.14 0.005 285);
-  --foreground: oklch(0.93 0.005 285);
-  --card: oklch(0.18 0.005 285);
-  --card-foreground: oklch(0.93 0.005 285);
-  --popover: oklch(0.2 0.005 285);
-  --popover-foreground: oklch(0.93 0.005 285);
-
-  --primary: oklch(0.65 0.2 270);
-  --primary-foreground: oklch(0.98 0 0);
-
-  --secondary: oklch(0.22 0.005 285);
-  --secondary-foreground: oklch(0.85 0.005 285);
-
-  --muted: oklch(0.22 0.005 285);
-  --muted-foreground: oklch(0.6 0.01 285);
-
-  --accent: oklch(0.25 0.02 270);
-  --accent-foreground: oklch(0.9 0.02 270);
-
-  --destructive: oklch(0.6 0.22 25);
-  --destructive-foreground: oklch(0.98 0 0);
-
-  --border: oklch(0.28 0.008 285);
-  --input: oklch(0.22 0.005 285);
-  --ring: oklch(0.65 0.2 270 / 0.4);
-
-  --success: oklch(0.65 0.17 155);
-  --warning: oklch(0.8 0.16 84);
-  --info: oklch(0.65 0.15 250);
-  --background-sunken: oklch(0.12 0.005 285);
-  --border-subtle: oklch(0.22 0.005 285);
-
-  --chart-1: oklch(0.65 0.2 270);
-  --chart-2: oklch(0.65 0.17 155);
-  --chart-3: oklch(0.65 0.15 250);
-  --chart-4: oklch(0.6 0.22 25);
-  --chart-5: oklch(0.65 0.15 310);
-
-  --sidebar: oklch(0.16 0.005 285);
-  --sidebar-foreground: oklch(0.93 0.005 285);
-  --sidebar-primary: oklch(0.65 0.2 270);
-  --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.22 0.005 285);
-  --sidebar-accent-foreground: oklch(0.85 0.005 285);
-  --sidebar-border: oklch(0.28 0.008 285);
-  --sidebar-ring: oklch(0.65 0.2 270 / 0.4);
+  --sidebar-accent: oklch(0.22 0.012 250);
+  --sidebar-accent-foreground: oklch(0.85 0.008 250);
+  --sidebar-border: oklch(0.28 0.014 250);
+  --sidebar-ring: oklch(0.65 0.155 250 / 0.4);
 
   color-scheme: dark;
 }
@@ -324,7 +294,7 @@
     border-radius: calc(var(--radius) * 0.5);
   }
 
-  /* Selection color — indigo accent. */
+  /* Selection color — refined blue accent. */
   ::selection {
     background-color: color-mix(in oklch, var(--primary) 25%, transparent);
     color: var(--foreground);
@@ -375,6 +345,23 @@
   .pulse-subtle {
     animation: pulse-subtle 2s ease-in-out infinite;
   }
+
+  /* Primary glow — soft blue glow for primary action buttons. */
+  .glow-primary {
+    box-shadow: var(--shadow-glow);
+  }
+
+  .glow-primary-lg {
+    box-shadow: var(--shadow-glow-lg);
+  }
+
+  /* Subtle radial vignette for dark backgrounds.
+   * Adds depth without being visible as a "gradient." */
+  .surface-vignette {
+    background:
+      radial-gradient(ellipse 80% 50% at 50% 0%, color-mix(in oklch, var(--primary) 4%, transparent), transparent 60%),
+      var(--background);
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -418,7 +405,7 @@
 
 [data-group] > [data-separator][data-separator='active'] {
   background-color: var(--primary);
-  box-shadow: 0 0 8px oklch(0.55 0.2 270 / 0.3);
+  box-shadow: 0 0 8px oklch(0.65 0.155 250 / 0.3);
 }
 
 [data-group] > [data-separator][data-separator='focus'] {

@@ -174,10 +174,30 @@ export function PreviewPanel({ html, isStreaming, projectTitle }: PreviewPanelPr
               className="relative h-full overflow-hidden rounded-md border border-border bg-white shadow-sm"
               style={{ maxWidth: '100%' }}
             >
+              {/*
+               * Sandbox:
+               *   - `allow-scripts` — the generated app needs JS to
+               *     run (todo apps, counters, fetch examples, etc.)
+               *   - `allow-same-origin` — required for `localStorage`
+               *     and `sessionStorage` to work. With `srcDoc` the
+               *     iframe is same-origin with the parent (both are
+               *     `about:srcdoc`), so this is safe — the srcdoc
+               *     content cannot reach into the parent DOM
+               *     because the sandbox blocks it.
+               *   - `allow-forms` — let the generated app submit
+               *     forms (contact form demos, login screens, etc.)
+               *
+               * We deliberately do NOT add `allow-top-navigation`,
+               * `allow-popups-to-escape-sandbox`, or
+               * `allow-modals` — none of these are needed for a
+               * generated single-page app, and omitting them keeps
+               * the blast radius small if a generated page is
+               * malicious.
+               */}
               <iframe
                 srcDoc={displayHtml}
                 title="Preview"
-                sandbox="allow-scripts"
+                sandbox="allow-scripts allow-same-origin allow-forms"
                 className="h-full w-full"
               />
             </motion.div>

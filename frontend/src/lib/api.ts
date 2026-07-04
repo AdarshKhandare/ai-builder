@@ -40,6 +40,19 @@
 /* ------------------------------------------------------------------ */
 
 /**
+ * Wire shape for the current authenticated user.
+ *
+ * Returned by `GET /api/auth/me`. `null` avatar / `null` email is
+ * valid (e.g. when the user's GitHub profile has neither set).
+ */
+export interface User {
+  id: number
+  username: string
+  avatar_url: string | null
+  email: string | null
+}
+
+/**
  * A model listed by `GET /api/models` (and by `GET /api/health` for
  * backward compatibility). The fields are the rich contract used by
  * the model picker and the cost estimator:
@@ -141,6 +154,7 @@ export interface IterateRequest {
  */
 export async function health(): Promise<HealthResponse> {
   const res = await fetch('/api/health', {
+    credentials: 'include',
     headers: { Accept: 'application/json' },
   })
   if (!res.ok) {
@@ -167,6 +181,7 @@ export async function health(): Promise<HealthResponse> {
  */
 export async function getModels(): Promise<ModelInfo[]> {
   const res = await fetch('/api/models', {
+    credentials: 'include',
     headers: { Accept: 'application/json' },
   })
   if (!res.ok) {
@@ -201,6 +216,7 @@ export async function* generateStream(
 ): AsyncGenerator<SSEEvent, void, void> {
   const res = await fetch('/api/generate', {
     method: 'POST',
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
@@ -287,6 +303,7 @@ export async function* iterateStream(
 ): AsyncGenerator<SSEEvent, void, void> {
   const res = await fetch('/api/iterate', {
     method: 'POST',
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
@@ -449,6 +466,7 @@ export async function listProjects(
     offset: String(offset),
   })
   const res = await fetch(`/api/projects?${params.toString()}`, {
+    credentials: 'include',
     headers: { Accept: 'application/json' },
   })
   return parseJson<ProjectSummary[]>(res, 'List projects')
@@ -462,6 +480,7 @@ export async function listProjects(
  */
 export async function getProject(id: number): Promise<ProjectFull> {
   const res = await fetch(`/api/projects/${id}`, {
+    credentials: 'include',
     headers: { Accept: 'application/json' },
   })
   return parseJson<ProjectFull>(res, `Get project ${id}`)
@@ -478,6 +497,7 @@ export async function createProject(
 ): Promise<ProjectFull> {
   const res = await fetch('/api/projects', {
     method: 'POST',
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json',
@@ -497,6 +517,7 @@ export async function updateProject(
 ): Promise<ProjectFull> {
   const res = await fetch(`/api/projects/${id}`, {
     method: 'PATCH',
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json',
@@ -513,11 +534,78 @@ export async function updateProject(
 export async function deleteProject(id: number): Promise<void> {
   const res = await fetch(`/api/projects/${id}`, {
     method: 'DELETE',
+    credentials: 'include',
     headers: { Accept: 'application/json' },
   })
   if (!res.ok) {
     throw new Error(
       `Delete project ${id} failed: ${res.status} ${res.statusText}`,
     )
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Auth API                                                            */
+/*                                                                     */
+/* Endpoints:                                                         */
+/*   GET   /api/auth/me       → { id, username, avatar_url, email }   */
+/*   POST  /api/auth/logout   → 204 (clears the session cookie)       */
+/*                                                                     */
+/* `GET /api/auth/login` and `GET /api/auth/callback` are SERVER-SIDE  */
+/* redirects to GitHub — the browser navigates to them with a full   */
+/* page reload, so they are NOT exposed here. The Login page calls    */
+/* `window.location.href = '/api/auth/login'` directly.               */
+/*                                                                     */
+/* `credentials: 'include'` is REQUIRED for the session cookie to     */
+/* reach the backend (otherwise fetch defaults to `same-origin` and  */
+/* the cookie is dropped on cross-origin deployments).                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Fetch the currently-authenticated user, or `null` if not signed in.
+ *
+ * `GET /api/auth/me` returns the user object on success (200) and a
+ * 401 when there is no active session. We translate the 401 to `null`
+ * so callers don't have to wrap every call in a try/catch — the
+ * canonical "not signed in" signal is simply `user === null`.
+ *
+ * Any other non-2xx response (500, 502, etc.) propagates as a thrown
+ * `Error` so the caller can decide whether to surface a toast or
+ * fall back to "not signed in". Network failures throw as well.
+ */
+export async function getMe(): Promise<User | null> {
+  const res = await fetch('/api/auth/me', {
+    credentials: 'include',
+    headers: { Accept: 'application/json' },
+  })
+  if (res.status === 401) {
+    // Canonical "not signed in". The backend never sets a cookie
+    // in this case, so the response is unauthenticated by design.
+    return null
+  }
+  if (!res.ok) {
+    throw new Error(
+      `Get current user failed: ${res.status} ${res.statusText}`,
+    )
+  }
+  return (await res.json()) as User
+}
+
+/**
+ * Clear the server-side session cookie. The backend returns 204 No
+ * Content on success. After a successful call the local `useAuth`
+ * hook also clears its in-memory user state.
+ *
+ * Throws an `Error` with a descriptive message on non-2xx. Network
+ * failures throw as well.
+ */
+export async function logout(): Promise<void> {
+  const res = await fetch('/api/auth/logout', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { Accept: 'application/json' },
+  })
+  if (!res.ok) {
+    throw new Error(`Logout failed: ${res.status} ${res.statusText}`)
   }
 }

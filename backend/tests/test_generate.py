@@ -92,7 +92,7 @@ def _patch_opencode_client(
 
 
 async def test_generate_streams_code(
-    client: AsyncClient,
+    auth_client: AsyncClient,
     mock_client: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -105,7 +105,7 @@ async def test_generate_streams_code(
     """
     _patch_opencode_client(monkeypatch, mock_client)
 
-    response = await client.post(
+    response = await auth_client.post(
         "/api/generate", json={"prompt": "build a landing page"}
     )
 
@@ -130,7 +130,7 @@ async def test_generate_streams_code(
 
 
 async def test_generate_has_status_events(
-    client: AsyncClient,
+    auth_client: AsyncClient,
     mock_client: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -143,7 +143,7 @@ async def test_generate_has_status_events(
     """
     _patch_opencode_client(monkeypatch, mock_client)
 
-    response = await client.post("/api/generate", json={"prompt": "test prompt"})
+    response = await auth_client.post("/api/generate", json={"prompt": "test prompt"})
     assert response.status_code == 200
 
     events = await _collect_sse_events(response)
@@ -160,7 +160,7 @@ async def test_generate_has_status_events(
     ), f"'planning' must come before 'generating'. Got: {status_sequence!r}"
 
 
-async def test_generate_rejects_empty_prompt(client: AsyncClient) -> None:
+async def test_generate_rejects_empty_prompt(auth_client: AsyncClient) -> None:
     """Empty prompt is rejected with HTTP 422 (Pydantic validation).
 
     The schema must declare ``min_length=1`` (or stricter) on ``prompt``.
@@ -170,7 +170,7 @@ async def test_generate_rejects_empty_prompt(client: AsyncClient) -> None:
     Asserts:
         * HTTP 422 from FastAPI's request validation
     """
-    response = await client.post("/api/generate", json={"prompt": ""})
+    response = await auth_client.post("/api/generate", json={"prompt": ""})
 
     assert (
         response.status_code == 422
@@ -184,21 +184,21 @@ async def test_generate_rejects_empty_prompt(client: AsyncClient) -> None:
 
 
 async def test_generate_default_model(
-    client: AsyncClient,
+    auth_client: AsyncClient,
     mock_client: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Omitting ``model`` uses the contract default of ``opencode-go/minimax-m3``.
+    """Omitting ``model`` uses the contract default of ``opencode-go/deepseek-v4-flash``.
 
     Asserts:
         * HTTP 200
         * The mock was consulted (the route did not short-circuit)
-        * Either the planner or coder call received ``opencode-go/minimax-m3``
+        * Either the planner or coder call received ``opencode-go/deepseek-v4-flash``
     """
     _patch_opencode_client(monkeypatch, mock_client)
 
     # No 'model' key — the Pydantic default must take over.
-    response = await client.post("/api/generate", json={"prompt": "test"})
+    response = await auth_client.post("/api/generate", json={"prompt": "test"})
     assert (
         response.status_code == 200
     ), f"Expected 200 for default-model request, got {response.status_code}: {response.text}"
@@ -210,7 +210,7 @@ async def test_generate_default_model(
 
     # Inspect the mock to confirm the default model id was used.
     # The route may call chat() (planner) and/or stream_chat() (coder).
-    default_model = "opencode-go/minimax-m3"
+    default_model = "opencode-go/deepseek-v4-flash"
     used_models: list[str] = []
     for method_name in ("chat", "stream_chat"):
         method = getattr(mock_client, method_name, None)
@@ -242,7 +242,7 @@ async def test_generate_default_model(
 
 
 async def test_generate_error_handling(
-    client: AsyncClient,
+    auth_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Upstream failures from ``OpenCodeClient`` surface as an ``error`` SSE event.
@@ -274,7 +274,7 @@ async def test_generate_error_handling(
 
     _patch_opencode_client(monkeypatch, error_mock)
 
-    response = await client.post("/api/generate", json={"prompt": "test"})
+    response = await auth_client.post("/api/generate", json={"prompt": "test"})
 
     # We intentionally do NOT assert response.status_code == 200 here.
     # The contract says the error is conveyed inside the stream; a
@@ -308,7 +308,7 @@ async def test_generate_error_handling(
 
 
 async def test_generate_closes_client(
-    client: AsyncClient,
+    auth_client: AsyncClient,
     mock_client: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -323,7 +323,7 @@ async def test_generate_closes_client(
     """
     _patch_opencode_client(monkeypatch, mock_client)
 
-    response = await client.post("/api/generate", json={"prompt": "test"})
+    response = await auth_client.post("/api/generate", json={"prompt": "test"})
     assert (
         response.status_code == 200
     ), f"Expected 200, got {response.status_code}: {response.text}"
@@ -355,9 +355,9 @@ def test_extract_title_with_body() -> None:
     title, body = _extract_title(plan)
 
     assert title == "My Todo App", f"Expected 'My Todo App', got {title!r}"
-    assert body == "A simple todo list with localStorage.", (
-        f"Expected plan body without title line, got {body!r}"
-    )
+    assert (
+        body == "A simple todo list with localStorage."
+    ), f"Expected plan body without title line, got {body!r}"
 
 
 def test_extract_title_only_title() -> None:
@@ -377,7 +377,9 @@ def test_extract_title_empty_plan() -> None:
 
     title, body = _extract_title("")
 
-    assert title == "Untitled", f"Empty plan should default to 'Untitled', got {title!r}"
+    assert (
+        title == "Untitled"
+    ), f"Empty plan should default to 'Untitled', got {title!r}"
     assert body == ""
 
 
@@ -424,11 +426,13 @@ def test_extract_title_strips_matching_quotes() -> None:
 
     plan_double = 'Title: "Quoted App"\nBody.'
     title_d, _ = _extract_title(plan_double)
-    assert title_d == "Quoted App", f'Double quotes should be stripped, got {title_d!r}'
+    assert title_d == "Quoted App", f"Double quotes should be stripped, got {title_d!r}"
 
     plan_single = "Title: 'Single Quoted'\nBody."
     title_s, _ = _extract_title(plan_single)
-    assert title_s == "Single Quoted", f"Single quotes should be stripped, got {title_s!r}"
+    assert (
+        title_s == "Single Quoted"
+    ), f"Single quotes should be stripped, got {title_s!r}"
 
 
 def test_extract_title_empty_title_falls_back() -> None:
@@ -442,7 +446,9 @@ def test_extract_title_empty_title_falls_back() -> None:
     plan = "Title:    \nBody of the plan."
     title, body = _extract_title(plan)
 
-    assert title == "Untitled", f"Empty title should default to 'Untitled', got {title!r}"
+    assert (
+        title == "Untitled"
+    ), f"Empty title should default to 'Untitled', got {title!r}"
     # Body should still be returned even if the title was empty — we
     # only consumed the title line, not the whole plan.
     assert body == "Body of the plan."
@@ -454,7 +460,7 @@ def test_extract_title_empty_title_falls_back() -> None:
 
 
 async def test_generate_emits_title_event(
-    client: AsyncClient,
+    auth_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The route extracts a ``Title:`` line and emits it as an SSE event.
@@ -481,8 +487,7 @@ async def test_generate_emits_title_event(
     title_mock = MagicMock(name="title_opencode_client")
     title_mock.chat = AsyncMock(
         return_value=(
-            "Title: My Todo App\n"
-            "A simple todo list with localStorage persistence."
+            "Title: My Todo App\n" "A simple todo list with localStorage persistence."
         ),
         name="chat",
     )
@@ -491,27 +496,21 @@ async def test_generate_emits_title_event(
         for chunk in ("<html>", "<body>", "</body></html>"):
             yield chunk
 
-    title_mock.stream_chat = MagicMock(
-        side_effect=_code_stream, name="stream_chat"
-    )
+    title_mock.stream_chat = MagicMock(side_effect=_code_stream, name="stream_chat")
     title_mock.close = AsyncMock(return_value=None, name="close")
 
     _patch_opencode_client(monkeypatch, title_mock)
 
-    response = await client.post(
-        "/api/generate", json={"prompt": "todo list app"}
-    )
+    response = await auth_client.post("/api/generate", json={"prompt": "todo list app"})
     assert response.status_code == 200
 
     events = await _collect_sse_events(response)
 
     title_events = [e for e in events if e.get("type") == "title"]
-    assert title_events, (
-        f"Expected at least one 'title' event, got events={events!r}"
-    )
-    assert title_events[0].get("content") == "My Todo App", (
-        f"Expected title 'My Todo App', got: {title_events[0]!r}"
-    )
+    assert title_events, f"Expected at least one 'title' event, got events={events!r}"
+    assert (
+        title_events[0].get("content") == "My Todo App"
+    ), f"Expected title 'My Todo App', got: {title_events[0]!r}"
 
     # The title event must come AFTER the planning status and BEFORE
     # the generating status, so the frontend can render the title in
@@ -539,24 +538,22 @@ async def test_generate_emits_title_event(
     title_mock.stream_chat.assert_called()
     call_kwargs = title_mock.stream_chat.call_args.kwargs
     coder_messages = call_kwargs.get("messages", [])
-    user_msg = next(
-        (m for m in coder_messages if m.get("role") == "user"), None
-    )
-    assert user_msg is not None, (
-        f"Expected a 'user' message in the coder call: {coder_messages!r}"
-    )
+    user_msg = next((m for m in coder_messages if m.get("role") == "user"), None)
+    assert (
+        user_msg is not None
+    ), f"Expected a 'user' message in the coder call: {coder_messages!r}"
     user_content = user_msg.get("content", "")
     assert "Title: My Todo App" not in user_content, (
         f"Title line should be stripped from the plan body passed to the "
         f"coder. Got: {user_content!r}"
     )
-    assert "todo list with localStorage" in user_content, (
-        f"Plan body should be passed to the coder. Got: {user_content!r}"
-    )
+    assert (
+        "todo list with localStorage" in user_content
+    ), f"Plan body should be passed to the coder. Got: {user_content!r}"
 
 
 async def test_generate_title_defaults_to_untitled(
-    client: AsyncClient,
+    auth_client: AsyncClient,
     mock_client: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -574,9 +571,7 @@ async def test_generate_title_defaults_to_untitled(
     """
     _patch_opencode_client(monkeypatch, mock_client)
 
-    response = await client.post(
-        "/api/generate", json={"prompt": "build a thing"}
-    )
+    response = await auth_client.post("/api/generate", json={"prompt": "build a thing"})
     assert response.status_code == 200
 
     events = await _collect_sse_events(response)

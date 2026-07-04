@@ -24,6 +24,7 @@
  */
 
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { Link } from 'react-router-dom'
 import { Download, Hammer, History, Plus, Star } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -113,22 +114,42 @@ function sortModels(models: ReadonlyArray<ModelInfo>): ModelInfo[] {
 /* Subcomponents                                                       */
 /* ------------------------------------------------------------------ */
 
+/**
+ * The Forge wordmark + icon. Sits on the far left of the TopBar. Renders
+ * as a router link to the landing page so users can hop back to the
+ * marketing surface from any builder state.
+ */
 function Logo() {
   return (
-    <div className="flex items-center gap-2">
+    <Link
+      to="/"
+      aria-label="Forge — back to landing page"
+      className="
+        group flex cursor-pointer items-center gap-2
+        rounded-md outline-none
+        focus-visible:ring-2 focus-visible:ring-ring
+        focus-visible:ring-offset-2 focus-visible:ring-offset-card
+      "
+    >
       <span
         aria-hidden="true"
         className="
           flex size-7 items-center justify-center
           rounded-md bg-accent text-accent-foreground
+          transition-colors group-hover:bg-primary/15
         "
       >
         <Hammer className="size-4 text-primary" />
       </span>
-      <span className="font-body text-base font-semibold text-foreground tracking-tight">
+      <span
+        className="
+          font-body text-base font-semibold tracking-tight text-foreground
+          transition-opacity group-hover:opacity-80
+        "
+      >
         Forge
       </span>
-    </div>
+    </Link>
   )
 }
 
@@ -217,15 +238,24 @@ function ModelPicker({ models, value, onChange }: ModelPickerProps) {
       <Tooltip>
         <Select value={value} onValueChange={onChange}>
           <TooltipTrigger asChild>
+            {/*
+             * The trigger is hidden on viewports narrower than `sm`
+             * — the chat-side `ChatModelPicker` handles model
+             * selection on mobile (it sits next to the prompt input).
+             * The TopBar's value is still kept in sync via the
+             * Builder's shared `selectedModel` state, so the
+             * picker's value is never "stale" — it's just rendered
+             * in the chat surface on small screens.
+             */}
             <SelectTrigger
               size="sm"
               aria-label="Select model"
               className="
-                h-8 max-w-[180px] gap-1.5
+                hidden h-8 w-[180px] gap-1.5
                 border-border bg-secondary
                 text-secondary-foreground
                 hover:bg-secondary/80
-                sm:max-w-[220px]
+                sm:flex sm:w-[220px]
               "
             >
               <SelectValue placeholder="Select model" />
@@ -331,6 +361,7 @@ function HistoryButton({ onClick, prefersReduced }: HistoryButtonProps) {
             whileHover={prefersReduced ? undefined : { scale: 1.02 }}
             whileTap={prefersReduced ? undefined : { scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            className="cursor-pointer"
           >
             <Button
               type="button"
@@ -338,7 +369,7 @@ function HistoryButton({ onClick, prefersReduced }: HistoryButtonProps) {
               size="sm"
               onClick={onClick}
               aria-label="Open project history"
-              className="h-8 gap-1.5"
+              className="h-8 min-h-[44px] gap-1.5 sm:min-h-0"
             >
               <History className="size-3.5" aria-hidden="true" />
               <span className="hidden sm:inline">History</span>
@@ -371,6 +402,7 @@ function NewProjectButton({ onClick, disabled, prefersReduced }: NewProjectButto
             whileHover={disabled || prefersReduced ? undefined : { scale: 1.02 }}
             whileTap={disabled || prefersReduced ? undefined : { scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            className="cursor-pointer"
           >
             <Button
               type="button"
@@ -379,7 +411,7 @@ function NewProjectButton({ onClick, disabled, prefersReduced }: NewProjectButto
               onClick={onClick}
               disabled={disabled}
               aria-label="Start a new project"
-              className="h-8 gap-1.5"
+              className="h-8 min-h-[44px] gap-1.5 sm:min-h-0"
             >
               <Plus className="size-3.5" aria-hidden="true" />
               <span className="hidden sm:inline">New</span>
@@ -413,6 +445,7 @@ function DownloadButton({ onClick, disabled, prefersReduced }: DownloadButtonPro
             whileHover={disabled || prefersReduced ? undefined : { scale: 1.02 }}
             whileTap={disabled || prefersReduced ? undefined : { scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            className="cursor-pointer"
           >
             <Button
               type="button"
@@ -421,7 +454,7 @@ function DownloadButton({ onClick, disabled, prefersReduced }: DownloadButtonPro
               onClick={onClick}
               disabled={disabled}
               aria-label="Download project as ZIP"
-              className="h-8 gap-1.5"
+              className="h-8 min-h-[44px] gap-1.5 sm:min-h-0"
             >
               <Download className="size-3.5" aria-hidden="true" />
               <span className="hidden sm:inline">Download</span>

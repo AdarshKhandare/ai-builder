@@ -57,14 +57,22 @@ import json
 import logging
 import time
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.coder import CODER_MAX_TOKENS, CODER_SYSTEM_PROMPT, CODER_TEMPERATURE
 from app.config import settings
+from app.models.database import get_db
 from app.models.schemas import IterateRequest
+from app.routes.deps import (
+    DAILY_LIMITS,
+    User,
+    check_usage_quota,
+    get_current_user,
+)
 from app.services.opencode_client import OpenCodeAPIError, OpenCodeClient
 
 logger = logging.getLogger(__name__)
@@ -183,8 +191,32 @@ def _build_iterate_messages(request: IterateRequest) -> list[dict[str, str]]:
     return messages
 
 
+# Quota dependency — thin wrapper around
+# :func:`app.routes.deps.check_usage_quota` that re-declares the
+# ``Depends``-injected ``user`` / ``db`` parameters and forwards
+# them along with the static ``endpoint`` / ``daily_limit``
+# values. A :func:`functools.partial` would be terser but
+# FastAPI's dependency introspection cannot see the original
+# signature through a ``partial`` object, so the explicit
+# wrapper is the working form.
+async def _iterate_quota(
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> tuple[User, AsyncSession]:
+    """Enforce the per-user iteration daily cap."""
+    return await check_usage_quota(
+        endpoint="iterate",
+        daily_limit=DAILY_LIMITS["iterate"],
+        user=user,
+        db=db,
+    )
+
+
 @router.post("/api/iterate")
-async def iterate(request: IterateRequest) -> StreamingResponse:
+async def iterate(
+    request: IterateRequest,
+    _quota: Annotated[tuple, Depends(_iterate_quota)],
+) -> StreamingResponse:
     """Apply a chat-style iteration to the current code and stream the result.
 
     The event sequence is:

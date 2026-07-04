@@ -9,6 +9,14 @@ for the on-the-wire format.
 The frontend parses each ``data:`` line as JSON and dispatches on the
 ``type`` field. See ``docs/PHASES.md`` Phase 3 for the consumer
 contract.
+
+Authentication
+--------------
+The endpoint is gated by :func:`app.routes.deps.get_current_user`
+(must have a valid ``forge_token`` JWT cookie) and the
+per-user daily generation cap is enforced by
+:func:`app.routes.deps.check_usage_quota` (default: 5
+generations per user per UTC day).
 """
 
 from __future__ import annotations
@@ -16,15 +24,23 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.coder import generate_code
 from app.agents.planner import create_plan
 from app.config import settings
+from app.models.database import get_db
+from app.routes.deps import (
+    DAILY_LIMITS,
+    User,
+    check_usage_quota,
+    get_current_user,
+)
 from app.services.opencode_client import OpenCodeAPIError, OpenCodeClient
 
 logger = logging.getLogger(__name__)
@@ -49,8 +65,9 @@ class GenerateRequest(BaseModel):
     Attributes:
         prompt: Natural-language description of the app the user wants.
         model: OpenCode Go model identifier used for the code-generation
-            step. Defaults to ``opencode-go/minimax-m3`` (best
-            cost/quality coder).
+            step. Defaults to ``opencode-go/deepseek-v4-flash`` — the
+            cheapest capable model on the curated catalogue, also the
+            default in the model picker.
     """
 
     prompt: str = Field(
@@ -59,7 +76,7 @@ class GenerateRequest(BaseModel):
         description="Natural-language app description from the user.",
     )
     model: str = Field(
-        default="opencode-go/minimax-m3",
+        default="opencode-go/deepseek-v4-flash",
         pattern=r"^opencode-go/[a-z0-9._-]+$",
         description="OpenCode Go model identifier to use for code generation.",
     )
@@ -72,6 +89,27 @@ def _sse(payload: dict[str, Any]) -> str:
     SSE event terminator.
     """
     return f"data: {json.dumps(payload)}\n\n"
+
+
+# Quota dependency — thin wrapper around
+# :func:`app.routes.deps.check_usage_quota` that re-declares the
+# ``Depends``-injected ``user`` / ``db`` parameters and forwards
+# them along with the static ``endpoint`` / ``daily_limit``
+# values. A :func:`functools.partial` would be terser but
+# FastAPI's dependency introspection cannot see the original
+# signature through a ``partial`` object, so the explicit
+# wrapper is the working form.
+async def _generate_quota(
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> tuple[User, AsyncSession]:
+    """Enforce the per-user generation daily cap."""
+    return await check_usage_quota(
+        endpoint="generate",
+        daily_limit=DAILY_LIMITS["generate"],
+        user=user,
+        db=db,
+    )
 
 
 def _extract_title(plan: str) -> tuple[str, str]:
@@ -122,7 +160,11 @@ def _extract_title(plan: str) -> tuple[str, str]:
         # ("Title: \"My App\""). We deliberately don't strip mixed
         # quotes — a leading quote with no matching close is treated as
         # part of the title.
-        if len(candidate) >= 2 and candidate[0] == candidate[-1] and candidate[0] in ('"', "'"):
+        if (
+            len(candidate) >= 2
+            and candidate[0] == candidate[-1]
+            and candidate[0] in ('"', "'")
+        ):
             candidate = candidate[1:-1].strip()
         candidate = candidate[:_MAX_TITLE_LENGTH].strip()
         if candidate:
@@ -133,7 +175,10 @@ def _extract_title(plan: str) -> tuple[str, str]:
 
 
 @router.post("/api/generate")
-async def generate(request: GenerateRequest) -> StreamingResponse:
+async def generate(
+    request: GenerateRequest,
+    _quota: Annotated[tuple, Depends(_generate_quota)],
+) -> StreamingResponse:
     """Run the planner -> coder pipeline and stream the result as SSE.
 
     The event sequence is:
@@ -150,6 +195,15 @@ async def generate(request: GenerateRequest) -> StreamingResponse:
     6. On failure: ``{"type": "error", "message": "<msg>"}`` — any
        uncaught exception is converted to an error event so the frontend
        can render a meaningful error message.
+
+    The endpoint requires a valid ``forge_token`` cookie (via
+    :func:`app.routes.deps.get_current_user`) and is rate-limited
+    to 5 generations per user per UTC day (via
+    :func:`app.routes.deps.check_usage_quota`). The quota event is
+    inserted on dependency resolution, before the SSE response
+    starts, so a 429 from the quota gate is the only
+    non-streaming error the caller sees — every failure past
+    that point arrives inside the stream as an ``error`` event.
     """
 
     async def event_generator() -> AsyncGenerator[str, None]:

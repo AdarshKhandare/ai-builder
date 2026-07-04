@@ -21,6 +21,7 @@
  */
 import type { ReactNode } from 'react'
 import { render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /* ------------------------------------------------------------------ */
@@ -133,11 +134,21 @@ afterEach(() => {
 /* ------------------------------------------------------------------ */
 
 describe('Builder() — chat mode (Phase 4)', () => {
+  // The Builder renders the shared `TopBar`, whose `Logo` is a
+  // `react-router` `Link`. Wrap every render in a `MemoryRouter`
+  // so that Link has the routing context it expects.
+  const renderInRouter = (): ReturnType<typeof render> =>
+    render(
+      <MemoryRouter initialEntries={['/builder']}>
+        <Builder />
+      </MemoryRouter>,
+    )
+
   it('test_mode_generation_no_code — placeholder says "Describe" when there is no code', async () => {
     sseState.code = ''
     sseState.isStreaming = false
 
-    render(<Builder />)
+    renderInRouter()
 
     // The chat input is rendered with aria-label="Prompt input".
     const input = await screen.findByLabelText('Prompt input')
@@ -149,7 +160,7 @@ describe('Builder() — chat mode (Phase 4)', () => {
     sseState.code = '<h1>hello</h1>'
     sseState.isStreaming = false
 
-    render(<Builder />)
+    renderInRouter()
 
     const input = await screen.findByLabelText('Prompt input')
     const placeholder = input.getAttribute('placeholder') ?? ''
@@ -160,7 +171,7 @@ describe('Builder() — chat mode (Phase 4)', () => {
     sseState.code = ''
     sseState.isStreaming = true
 
-    render(<Builder />)
+    renderInRouter()
 
     const input = await screen.findByLabelText('Prompt input')
     expect(input).toBeDisabled()
@@ -170,7 +181,7 @@ describe('Builder() — chat mode (Phase 4)', () => {
     sseState.code = '<h1>done</h1>'
     sseState.isStreaming = false
 
-    render(<Builder />)
+    renderInRouter()
 
     const input = await screen.findByLabelText('Prompt input')
     expect(input).not.toBeDisabled()

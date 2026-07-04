@@ -37,7 +37,6 @@ from __future__ import annotations
 from typing import Any, AsyncIterator
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
 import pytest
 
 from app.services.opencode_client import OpenCodeAPIError, OpenCodeClient

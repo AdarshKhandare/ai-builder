@@ -51,7 +51,10 @@ import { ArrowDown, Hammer, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { AgentStages, type AgentStage } from './AgentStages'
+import { ChatModelPicker } from './ChatModelPicker'
 import { MessageBubble } from './MessageBubble'
+import type { ModelInfo } from '@/lib/api'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -84,6 +87,23 @@ interface ChatPanelProps {
    * `"iteration"` shows the "ask for changes" copy.
    */
   mode?: ChatMode
+  /**
+   * Length of the most recent generated `code` (in characters).
+   * Used by the `AgentStages` "done" summary line to show
+   * "Generated 1.2k chars" — gives the user a quick sense of
+   * what was produced without expanding the panel.
+   */
+  codeLength?: number
+  /**
+   * Model catalog for the in-line `ChatModelPicker`. When omitted
+   * the picker is not rendered — useful for tests / callers that
+   * don't care about model selection at the input level.
+   */
+  models?: ModelInfo[]
+  /** Currently selected model id, e.g. `opencode-go/minimax-m3`. */
+  selectedModel?: string
+  /** Called when the user picks a different model from the picker. */
+  onModelChange?: (model: string) => void
 }
 
 /**
@@ -111,6 +131,10 @@ export function ChatPanel({
   status,
   fullWidth = false,
   mode = 'generation',
+  codeLength = 0,
+  models,
+  selectedModel,
+  onModelChange,
 }: ChatPanelProps) {
   const [input, setInput] = useState('')
   const scrollAnchorRef = useRef<HTMLDivElement>(null)
@@ -196,14 +220,21 @@ export function ChatPanel({
     setIsAtBottom(true)
   }
 
-  const statusText =
-    status === 'planning'
-      ? 'Planning…'
+  /**
+   * Derive the `AgentStage` from the raw `status` + `isStreaming`
+   * combination. The component renders an expanded card for each
+   * in-flight stage and a collapsed summary line once the run
+   * completes.
+   */
+  const agentStage: AgentStage = !isStreaming
+    ? 'done'
+    : status === 'planning'
+      ? 'planning'
       : status === 'generating'
-        ? 'Generating…'
+        ? 'generating'
         : status === 'iterating'
-          ? 'Iterating…'
-          : 'Thinking…'
+          ? 'iterating'
+          : 'planning'
 
   /**
    * Placeholder text — switches between the "first build" and the
@@ -276,28 +307,20 @@ export function ChatPanel({
             </AnimatePresence>
 
             <AnimatePresence>
-              {isStreaming && (
-                <motion.div
-                  key="streaming-indicator"
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  transition={{ duration: 0.15, ease: 'easeOut' }}
-                  className="flex items-center gap-2 self-start text-xs text-muted-foreground"
-                  aria-live="polite"
-                >
-                  <motion.span
-                    className="inline-block size-2 rounded-full bg-primary"
-                    animate={{ opacity: [0.4, 1, 0.4] }}
-                    transition={{
-                      duration: 1.5,
-                      repeat: Infinity,
-                      ease: 'easeInOut',
-                    }}
-                  />
-                  <span>{statusText}</span>
-                </motion.div>
-              )}
+              {/*
+               * The thinking / writing status card. While a stream
+               * is in flight it shows an expanded card with a pulsing
+               * dot. When the run completes it collapses to a single
+               * "✓ Planned · Generated 1.2k chars" line that's
+               * clickable to expand for the plan detail.
+               */}
+              {isStreaming || codeLength > 0 ? (
+                <AgentStages
+                  key="agent-stages"
+                  stage={agentStage}
+                  codeLength={codeLength}
+                />
+              ) : null}
             </AnimatePresence>
 
             <div ref={scrollAnchorRef} aria-hidden="true" />
@@ -305,12 +328,15 @@ export function ChatPanel({
         </ScrollArea>
       )}
 
-      {/* Input area — always anchored to the bottom of the panel. */}
+      {/* Input area — always anchored to the bottom of the panel.
+          On mobile the whole row is full-width so the input takes
+          the available space and the send button stays a comfortable
+          44px+ touch target. */}
       <div
         className={
           fullWidth
-            ? 'shrink-0 border-t border-border bg-card p-4'
-            : 'shrink-0 border-t border-border bg-card p-3'
+            ? 'shrink-0 border-t border-border bg-card p-3 sm:p-4'
+            : 'shrink-0 border-t border-border bg-card p-2.5 sm:p-3'
         }
       >
         <div
@@ -320,13 +346,28 @@ export function ChatPanel({
               : 'flex items-center gap-2'
           }
         >
+          {/*
+           * Compact in-line model selector — duplicates the TopBar
+           * picker so the user can switch models without leaving the
+           * chat surface. Hidden when the caller doesn't pass the
+           * `models` + `selectedModel` + `onModelChange` triple
+           * (preserves the existing API for tests and other callers).
+           */}
+          {models && selectedModel !== undefined && onModelChange ? (
+            <ChatModelPicker
+              models={models}
+              selectedModel={selectedModel}
+              onModelChange={onModelChange}
+              isStreaming={isStreaming}
+            />
+          ) : null}
           <Input
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
             disabled={isStreaming}
-            className="bg-background-sunken"
+            className="min-w-0 flex-1 bg-background-sunken"
             aria-label="Prompt input"
           />
           <Button
@@ -335,6 +376,7 @@ export function ChatPanel({
             disabled={!canSend}
             size="icon"
             aria-label="Send message"
+            className="size-9 shrink-0 sm:size-9"
           >
             <Send />
           </Button>
@@ -355,7 +397,7 @@ export function ChatPanel({
             aria-label="Scroll chat to bottom"
             className="
               absolute bottom-20 right-4 z-10
-              flex items-center gap-1.5 rounded-full
+              flex cursor-pointer items-center gap-1.5 rounded-full
               border border-border bg-secondary px-3 py-1.5
               text-xs font-medium text-secondary-foreground
               shadow-md
@@ -403,7 +445,7 @@ function CompactEmptyState({ onSuggestion, isStreaming }: EmptyStateProps) {
             type="button"
             onClick={() => onSuggestion(suggestion)}
             disabled={isStreaming}
-            className="rounded-full bg-secondary px-3 py-1.5 text-xs text-secondary-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
+            className="cursor-pointer rounded-full bg-secondary px-3 py-1.5 text-xs text-secondary-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50"
           >
             {suggestion}
           </button>
@@ -461,12 +503,12 @@ function FullWidthEmptyState({ onSuggestion, isStreaming }: EmptyStateProps) {
               onClick={() => onSuggestion(suggestion)}
               disabled={isStreaming}
               className="
-                rounded-full bg-secondary px-4 py-2.5 text-sm
+                cursor-pointer rounded-full bg-secondary px-4 py-2.5 text-sm
                 text-secondary-foreground
                 transition-colors hover:bg-accent hover:text-accent-foreground
                 focus-visible:outline-none focus-visible:ring-2
                 focus-visible:ring-ring/50
-                disabled:pointer-events-none disabled:opacity-50
+                disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50
               "
             >
               {suggestion}

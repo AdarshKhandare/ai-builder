@@ -1,10 +1,15 @@
 /* ---------------------------------------------------------------------------
  * Forge — fonts.css
  *
- * "Calm Precision" typography:
- *   --font-display  → Instrument Serif   (editorial headlines)
- *   --font-body     → Geist              (clean UI text)
+ * "Refined Dark" typography:
+ *   --font-display  → Instrument Serif   (editorial headlines, elegant on dark)
+ *   --font-body     → Geist              (clean UI text, Vercel-grade)
  *   --font-mono     → Geist Mono         (code, stats)
+ *
+ * These fonts work beautifully on dark backgrounds:
+ *   - Instrument Serif's thin strokes gain elegance against charcoal
+ *   - Geist is optimised for screen rendering at all sizes
+ *   - Geist Mono provides excellent code legibility
  *
  * Google Fonts <link> tags are in index.html with display=swap.
  * Variable-font ranges let the browser interpolate any weight

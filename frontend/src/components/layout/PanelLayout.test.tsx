@@ -2,7 +2,12 @@
  * Tests for `src/components/layout/PanelLayout.tsx`.
  *
  * Progressive disclosure for the new 2-column layout:
- *   - showCode=false                  → only chat rendered
+ *   - showCode=false                  → only chat rendered visibly;
+ *                                       the right panel is collapsed
+ *                                       to 0% via the imperative
+ *                                       `PanelImperativeHandle` but
+ *                                       its content is unmounted by
+ *                                       AnimatePresence
  *   - showCode=true,  showPreview=false, activeTab='code'
  *                                     → chat + code (Preview tab hidden)
  *   - showCode=true,  showPreview=true,  activeTab='code'
@@ -11,6 +16,12 @@
  *   - showCode=true,  showPreview=true,  activeTab='preview'
  *                                     → chat + preview (code content
  *                                       hidden by AnimatePresence)
+ *
+ * 2026-07-04 (Builder UX pass) — the Group is now always mounted
+ * (was unmounted on `showCode=false`). The chat panel is
+ * `data-testid="chat-panel"` and remains visible across the
+ * showCode toggle; the code/preview panels are gated by the
+ * `AnimatePresence` inside the (always-mounted) right Panel.
  *
  * We force the desktop breakpoint via a `matchMedia` override so the
  * layout is deterministic.
@@ -79,8 +90,8 @@ interface RenderOpts {
   mobileTab?: MobileTab
 }
 
-function renderPanels(opts: RenderOpts): void {
-  render(
+function renderPanels(opts: RenderOpts): ReturnType<typeof render> {
+  return render(
     <PanelLayout
       showCode={opts.showCode}
       showPreview={opts.showPreview}
@@ -104,6 +115,9 @@ describe('PanelLayout() — progressive disclosure (desktop)', () => {
     renderPanels({ showCode: false, showPreview: false })
 
     expect(screen.getByTestId('chat-panel')).toBeInTheDocument()
+    // When showCode=false the right panel is collapsed (size 0) and
+    // its content is unmounted by AnimatePresence. The code/preview
+    // content is therefore NOT in the DOM.
     expect(screen.queryByTestId('code-panel')).not.toBeInTheDocument()
     expect(screen.queryByTestId('preview-panel')).not.toBeInTheDocument()
   })
@@ -130,5 +144,43 @@ describe('PanelLayout() — progressive disclosure (desktop)', () => {
 
     expect(screen.getByTestId('chat-panel')).toBeInTheDocument()
     expect(screen.getByTestId('preview-panel')).toBeInTheDocument()
+  })
+
+  it('test_chat_always_present_across_toggle — chat panel stays in DOM when showCode flips', () => {
+    // Regression: previously the entire Group unmounted on
+    // showCode=false, which reset panel sizes and produced the
+    // "chat shrinks to 35% the moment the user sends the first
+    // prompt" glitch. The Group is now always mounted; the chat
+    // panel should be present across the toggle.
+    const { rerender } = render(
+      <PanelLayout
+        showCode={false}
+        showPreview={false}
+        activeTab="code"
+        onActiveTabChange={() => undefined}
+        mobileTab="chat"
+        onMobileTabChange={() => undefined}
+        chatPanel={<div data-testid="chat-panel">chat</div>}
+        codePanel={<div data-testid="code-panel">code</div>}
+        previewPanel={<div data-testid="preview-panel">preview</div>}
+      />,
+    )
+    expect(screen.getByTestId('chat-panel')).toBeInTheDocument()
+
+    rerender(
+      <PanelLayout
+        showCode={true}
+        showPreview={false}
+        activeTab="code"
+        onActiveTabChange={() => undefined}
+        mobileTab="chat"
+        onMobileTabChange={() => undefined}
+        chatPanel={<div data-testid="chat-panel">chat</div>}
+        codePanel={<div data-testid="code-panel">code</div>}
+        previewPanel={<div data-testid="preview-panel">preview</div>}
+      />,
+    )
+    expect(screen.getByTestId('chat-panel')).toBeInTheDocument()
+    expect(screen.getByTestId('code-panel')).toBeInTheDocument()
   })
 })

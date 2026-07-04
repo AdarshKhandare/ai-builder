@@ -6,6 +6,8 @@
  *  - `getModels()` — JSON GET against `/api/models`.
  *  - `generateStream()` — async generator that parses SSE frames.
  *  - `iterateStream()` — async generator for chat-style follow-up turns.
+ *  - `getMe()` — JSON GET against `/api/auth/me`.
+ *  - `logout()` — JSON POST against `/api/auth/logout`.
  *
  * `fetch` is replaced with a `vi.fn()` per test so we can assert the
  * request shape and inject canned responses.
@@ -13,9 +15,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   generateStream,
+  getMe,
   getModels,
   health,
   iterateStream,
+  logout,
   type ChatMessage,
   type ModelInfo,
   type SSEEvent,
@@ -67,6 +71,7 @@ describe('health()', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
     // Hit the proxied backend, send the JSON Accept header.
     expect(fetchMock).toHaveBeenCalledWith('/api/health', {
+      credentials: 'include',
       headers: { Accept: 'application/json' },
     })
     expect(result.status).toBe('ok')
@@ -127,6 +132,7 @@ describe('getModels()', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetchMock).toHaveBeenCalledWith('/api/models', {
+      credentials: 'include',
       headers: { Accept: 'application/json' },
     })
     expect(result).toEqual(models)
@@ -184,6 +190,7 @@ describe('generateStream()', () => {
     // POST the JSON body, with the right content type and SSE accept.
     expect(fetchMock).toHaveBeenCalledWith('/api/generate', {
       method: 'POST',
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',
@@ -312,6 +319,7 @@ describe('iterateStream()', () => {
     // current_code, history, and (optional) model.
     expect(fetchMock).toHaveBeenCalledWith('/api/iterate', {
       method: 'POST',
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',
@@ -463,5 +471,101 @@ describe('iterateStream()', () => {
     expect(collected).toEqual(events)
     const errorEvent = collected.find((e) => e.type === 'error')
     expect(errorEvent).toEqual({ type: 'error', message: 'model rate limited' })
+  })
+})
+
+/* ------------------------------------------------------------------ */
+/* getMe()                                                             */
+/* ------------------------------------------------------------------ */
+
+describe('getMe()', () => {
+  it('test_getMe_returns_user — fetches the user with credentials: include', async () => {
+    const user = {
+      id: 42,
+      username: 'octocat',
+      avatar_url: 'https://github.com/images/octocat.png',
+      email: 'octocat@github.com',
+    }
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(user), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await getMe()
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    // credentials: 'include' is required so the session cookie
+    // reaches the backend on cross-origin deployments.
+    expect(fetchMock).toHaveBeenCalledWith('/api/auth/me', {
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+    })
+    expect(result).toEqual(user)
+  })
+
+  it('test_getMe_returns_null_on_401 — canonical "not signed in" is null, not an error', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ detail: 'Not authenticated' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    // 401 must resolve to null so callers don't have to wrap
+    // the canonical "not signed in" response in a try/catch.
+    await expect(getMe()).resolves.toBeNull()
+  })
+
+  it('test_getMe_throws_on_500 — non-401 failures surface as Error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(mockErrorResponse(500, 'Internal Server Error')),
+    )
+
+    await expect(getMe()).rejects.toThrow(/Get current user failed: 500/)
+  })
+
+  it('test_getMe_throws_on_network_failure — fetch rejections propagate', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockRejectedValue(new TypeError('NetworkError')),
+    )
+
+    await expect(getMe()).rejects.toThrow(/NetworkError/)
+  })
+})
+
+/* ------------------------------------------------------------------ */
+/* logout()                                                            */
+/* ------------------------------------------------------------------ */
+
+describe('logout()', () => {
+  it('test_logout_posts_with_credentials — clears the session via POST', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(null, { status: 204 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await logout()
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledWith('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+    })
+  })
+
+  it('test_logout_throws_on_error — non-2xx surfaces as Error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(mockErrorResponse(503, 'Service Unavailable')),
+    )
+
+    await expect(logout()).rejects.toThrow(/Logout failed: 503/)
   })
 })

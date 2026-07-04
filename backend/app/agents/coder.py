@@ -13,8 +13,16 @@ from collections.abc import AsyncGenerator
 
 from app.services.opencode_client import OpenCodeClient
 
-DEFAULT_CODER_MODEL = "opencode-go/minimax-m3"
-"""Default model used for code generation."""
+DEFAULT_CODER_MODEL = "opencode-go/deepseek-v4-flash"
+"""Default model used for code generation.
+
+Matches the catalogue default in
+:data:`app.routes.models._MODELS_CATALOGUE` and the default
+declared in :class:`app.routes.generate.GenerateRequest`. Kept
+as a module constant for code paths that need to know the
+default without re-parsing the Pydantic model (e.g. the
+``coder`` agent itself when called directly in tests).
+"""
 
 CODER_TEMPERATURE = 0.7
 """Moderate temperature: enough variety for creative styling, not chaotic."""

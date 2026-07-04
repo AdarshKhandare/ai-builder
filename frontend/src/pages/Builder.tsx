@@ -645,8 +645,9 @@ export function Builder() {
         hasDownload={code.trim().length > 0}
       />
 
-      {/* Thin indigo progress bar — only visible while streaming. */}
-      <GenerationProgressBar isStreaming={isStreaming} />
+      {/* Thin indigo progress bar — only visible while streaming
+          (or briefly after a run completes while we show 100%). */}
+      <GenerationProgressBar isStreaming={isStreaming} hasError={!!error} />
 
       <div className="relative flex-1 overflow-hidden">
         <PanelLayout
@@ -663,7 +664,11 @@ export function Builder() {
               isStreaming={isStreaming}
               status={status}
               mode={mode}
+              codeLength={code.length}
               fullWidth={!showCode}
+              models={models}
+              selectedModel={selectedModel}
+              onModelChange={setSelectedModel}
             />
           }
           codePanel={
