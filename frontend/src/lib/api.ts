@@ -3,7 +3,11 @@
  *
  * The FastAPI backend exposes these endpoints used by the builder:
  *
- * - `GET  /api/health`   — service status + available model catalog.
+ * - `GET  /api/health`   — service status. (The model catalog has
+ *   moved to `GET /api/models`; `health()` still returns a
+ *   best-effort `models` array for backward compatibility.)
+ * - `GET  /api/models`   — model catalog with full pricing and
+ *   metadata. Used by the model picker and the cost estimator.
  * - `POST /api/generate`  — streams a Server-Sent Events (SSE) response
  *   shaped as a sequence of JSON frames:
  *
@@ -35,18 +39,53 @@
 /* Types                                                               */
 /* ------------------------------------------------------------------ */
 
-/** A model listed by `GET /api/health`. */
+/**
+ * A model listed by `GET /api/models` (and by `GET /api/health` for
+ * backward compatibility). The fields are the rich contract used by
+ * the model picker and the cost estimator:
+ *
+ *   - `provider`           Display-only (e.g. "opencode-go"). Strips
+ *                          the `opencode-go/` prefix from `id` for
+ *                          the dropdown row.
+ *   - `endpoint`           Wire-protocol hint. `openai` targets the
+ *                          OpenAI chat completions API; `anthropic`
+ *                          targets Anthropic messages. The backend
+ *                          gateway uses this to pick the right
+ *                          request shape when proxying.
+ *   - `role`               What the model is best at. `coder` for
+ *                          full app generation, `planner` for plan-
+ *                          first flows, `both` for general use. The
+ *                          picker sorts recommended `coder`/`both`
+ *                          models to the top.
+ *   - `input_price_per_mtok`  USD per 1M input tokens.
+ *   - `output_price_per_mtok` USD per 1M output tokens.
+ *   - `context_window`        Max input tokens the model accepts.
+ *   - `recommended`        `true` to surface a "Recommended" badge
+ *                          in the picker; the picker also sorts
+ *                          recommended entries to the top.
+ *   - `description`        One-line tooltip shown in the picker.
+ */
 export interface ModelInfo {
   id: string
   name: string
-  cost_input: number
-  cost_output: number
-  endpoint: string
+  provider: string
+  endpoint: 'openai' | 'anthropic'
+  role: 'coder' | 'planner' | 'both'
+  input_price_per_mtok: number
+  output_price_per_mtok: number
+  context_window: number
+  recommended: boolean
+  description: string
 }
 
 /** Response shape of `GET /api/health`. */
 export interface HealthResponse {
   status: string
+  models: ModelInfo[]
+}
+
+/** Response shape of `GET /api/models`. */
+export interface ModelsResponse {
   models: ModelInfo[]
 }
 
@@ -94,6 +133,11 @@ export interface IterateRequest {
  * Throws an `Error` if the network request fails or the backend
  * returns a non-2xx response. Callers should surface the message in a
  * toast / error boundary.
+ *
+ * Note: the model catalog has moved to {@link getModels}. `health()`
+ * still returns a `models` array for backward compatibility, but new
+ * code should call `getModels()` directly (typically via the
+ * `useModels` hook).
  */
 export async function health(): Promise<HealthResponse> {
   const res = await fetch('/api/health', {
@@ -103,6 +147,33 @@ export async function health(): Promise<HealthResponse> {
     throw new Error(`Health check failed: ${res.status} ${res.statusText}`)
   }
   return (await res.json()) as HealthResponse
+}
+
+/* ------------------------------------------------------------------ */
+/* Models                                                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Fetch the model catalog.
+ *
+ * Returns the full {@link ModelInfo} array for the backend's available
+ * models, including pricing, context window, and the `recommended`
+ * flag used by the picker.
+ *
+ * Throws an `Error` with a descriptive message on non-2xx responses
+ * or network failures. Callers (typically the `useModels` hook)
+ * should catch and fall back to a hardcoded list so the UI always
+ * has something to show — even in offline / demo mode.
+ */
+export async function getModels(): Promise<ModelInfo[]> {
+  const res = await fetch('/api/models', {
+    headers: { Accept: 'application/json' },
+  })
+  if (!res.ok) {
+    throw new Error(`Get models failed: ${res.status} ${res.statusText}`)
+  }
+  const data = (await res.json()) as ModelsResponse
+  return data.models
 }
 
 /* ------------------------------------------------------------------ */

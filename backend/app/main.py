@@ -1,4 +1,5 @@
 """FastAPI application entry point."""
+
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -8,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.models.database import init_db
-from app.routes import generate, health, iterate, projects
+from app.routes import generate, health, iterate, models, projects
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,7 @@ app.add_middleware(
 )
 
 app.include_router(health.router)
+app.include_router(models.router)
 app.include_router(generate.router)
 app.include_router(iterate.router)
 app.include_router(projects.router)

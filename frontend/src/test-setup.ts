@@ -56,3 +56,17 @@ if (typeof window !== 'undefined' && typeof window.ResizeObserver !== 'function'
   ;(globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver =
     ResizeObserverStub
 }
+
+// jsdom does not implement `Element.prototype.scrollIntoView`. Radix
+// Select calls it on the highlighted item when the dropdown opens,
+// so any test that opens a Select will throw `scrollIntoView is not
+// a function` without this polyfill. The stub is a no-op — jsdom
+// doesn't compute layout, so the call has nothing to scroll anyway.
+if (
+  typeof Element !== 'undefined' &&
+  typeof Element.prototype.scrollIntoView !== 'function'
+) {
+  Element.prototype.scrollIntoView = function scrollIntoView(): void {
+    /* no-op for jsdom */
+  }
+}

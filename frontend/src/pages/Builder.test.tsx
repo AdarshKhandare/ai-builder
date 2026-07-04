@@ -1,13 +1,11 @@
 /**
  * Tests for `src/pages/Builder.tsx`.
  *
- * The Builder is the integration point for Phase 4 chat iteration.
- * It owns the `history` state, the `mode` derivation, and the
- * dispatch between `start()` (initial generation) and `iterate()`
- * (chat follow-up). A full end-to-end render would require
- * mocking fetch, JSZip, sonner, the HistoryDrawer, and half a
- * dozen UI primitives, so we test the *minimum* needed to lock in
- * the Phase 4 invariants:
+ * The Builder is the integration point for chat iteration, model
+ * selection, and the cost estimate. A full end-to-end render would
+ * require mocking fetch, JSZip, sonner, the HistoryDrawer, the
+ * useModels hook, and half a dozen UI primitives, so we test the
+ * *minimum* needed to lock in the invariants:
  *
  *  - When `code` is empty and no stream is in flight, the chat
  *    input's placeholder says "Describe …" (generation mode).
@@ -57,18 +55,23 @@ vi.mock('@/lib/api', async () => {
   const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api')
   return {
     ...actual,
-    health: vi.fn().mockResolvedValue({
-      status: 'ok',
-      models: [
-        {
-          id: 'opencode-go/minimax-m3',
-          name: 'MiniMax M3',
-          cost_input: 0.14,
-          cost_output: 0.28,
-          endpoint: '/api/generate',
-        },
-      ],
-    }),
+    // The Builder now pulls the model catalog from `getModels` via
+    // the `useModels` hook. Mock it to return a single recommended
+    // model so the picker is populated without hitting the network.
+    getModels: vi.fn().mockResolvedValue([
+      {
+        id: 'opencode-go/minimax-m3',
+        name: 'MiniMax M3',
+        provider: 'opencode-go',
+        endpoint: 'openai',
+        role: 'coder',
+        input_price_per_mtok: 0.14,
+        output_price_per_mtok: 0.28,
+        context_window: 200_000,
+        recommended: true,
+        description: 'Cheap and fast.',
+      },
+    ]),
     createProject: vi.fn().mockResolvedValue({ id: 1 }),
     updateProject: vi.fn().mockResolvedValue({ id: 1 }),
   }

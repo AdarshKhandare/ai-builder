@@ -3,6 +3,7 @@
  *
  * Covers the exported functions:
  *  - `health()` — JSON GET against `/api/health`.
+ *  - `getModels()` — JSON GET against `/api/models`.
  *  - `generateStream()` — async generator that parses SSE frames.
  *  - `iterateStream()` — async generator for chat-style follow-up turns.
  *
@@ -10,7 +11,15 @@
  * request shape and inject canned responses.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { generateStream, health, iterateStream, type ChatMessage, type SSEEvent } from './api'
+import {
+  generateStream,
+  getModels,
+  health,
+  iterateStream,
+  type ChatMessage,
+  type ModelInfo,
+  type SSEEvent,
+} from './api'
 import {
   mockErrorResponse,
   mockHangingSSEStream,
@@ -34,9 +43,14 @@ describe('health()', () => {
         {
           id: 'opencode-go/minimax-m3',
           name: 'MiniMax M3',
-          cost_input: 0.14,
-          cost_output: 0.28,
-          endpoint: '/v1/chat/completions',
+          provider: 'opencode-go',
+          endpoint: 'openai',
+          role: 'coder',
+          input_price_per_mtok: 0.14,
+          output_price_per_mtok: 0.28,
+          context_window: 200_000,
+          recommended: true,
+          description: 'Cheap and fast.',
         },
       ],
     }
@@ -58,13 +72,90 @@ describe('health()', () => {
     expect(result.status).toBe('ok')
     expect(result.models).toHaveLength(1)
     expect(result.models[0]?.id).toBe('opencode-go/minimax-m3')
-    expect(result.models[0]?.cost_input).toBe(0.14)
+    expect(result.models[0]?.input_price_per_mtok).toBe(0.14)
+    expect(result.models[0]?.recommended).toBe(true)
   })
 
   it('test_health_throws_on_error — surfaces a non-2xx as an Error', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockErrorResponse(503, 'Service Unavailable')))
 
     await expect(health()).rejects.toThrow(/Health check failed: 503/)
+  })
+})
+
+/* ------------------------------------------------------------------ */
+/* getModels()                                                         */
+/* ------------------------------------------------------------------ */
+
+describe('getModels()', () => {
+  it('test_getModels_returns_models — fetches the catalog and returns the models array', async () => {
+    const models: ModelInfo[] = [
+      {
+        id: 'opencode-go/minimax-m3',
+        name: 'MiniMax M3',
+        provider: 'opencode-go',
+        endpoint: 'openai',
+        role: 'coder',
+        input_price_per_mtok: 0.14,
+        output_price_per_mtok: 0.28,
+        context_window: 200_000,
+        recommended: true,
+        description: 'Cheap and fast.',
+      },
+      {
+        id: 'opencode-go/qwen-3.7-plus',
+        name: 'Qwen 3.7 Plus',
+        provider: 'opencode-go',
+        endpoint: 'openai',
+        role: 'both',
+        input_price_per_mtok: 0.4,
+        output_price_per_mtok: 1.2,
+        context_window: 128_000,
+        recommended: false,
+        description: 'Mid-cost generalist.',
+      },
+    ]
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ models }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await getModels()
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledWith('/api/models', {
+      headers: { Accept: 'application/json' },
+    })
+    expect(result).toEqual(models)
+    expect(result).toHaveLength(2)
+    // Pin the rich shape end-to-end so a future refactor that
+    // drops pricing or the recommended flag is caught here.
+    expect(result[0]?.input_price_per_mtok).toBe(0.14)
+    expect(result[0]?.recommended).toBe(true)
+    expect(result[1]?.provider).toBe('opencode-go')
+  })
+
+  it('test_getModels_throws_on_error — surfaces a non-2xx as an Error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(mockErrorResponse(404, 'Not Found')),
+    )
+
+    await expect(getModels()).rejects.toThrow(/Get models failed: 404/)
+  })
+
+  it('test_getModels_throws_on_network_failure — surfaces fetch rejections', async () => {
+    // The hook layer treats this as the fallback path; getModels
+    // itself is the thin wrapper that just propagates.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockRejectedValue(new TypeError('NetworkError')),
+    )
+
+    await expect(getModels()).rejects.toThrow(/NetworkError/)
   })
 })
 
