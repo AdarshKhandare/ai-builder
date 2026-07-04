@@ -4,6 +4,20 @@ import { Lock, Monitor, Smartphone, Tablet } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 
+/**
+ * PreviewPanel — the live-rendering preview of the generated app.
+ *
+ * Spec (`docs/UI_REDESIGN_SPEC.md` §7.5 — "Calm Precision" light theme):
+ *  - White card bg with a subtle border + shadow-sm device frame.
+ *  - URL bar uses `bg-background-sunken` with muted mono text.
+ *  - Streaming overlay: `bg-background/60` with `backdrop-blur-sm`
+ *    so the page underneath reads as "building" rather than blank.
+ *  - Indigo streaming dot (matches the rest of the design system).
+ *
+ * 2026-07-04 (Phase 6 redesign) — light theme, subtle border + shadow,
+ *  no amber accents.
+ */
+
 interface PreviewPanelProps {
   html: string
   isStreaming: boolean

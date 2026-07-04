@@ -1,7 +1,7 @@
 /**
  * HistoryDrawer — slide-in panel listing every saved project.
  *
- * Spec: `docs/BUILDER_REDESIGN_SPEC.md` §3.
+ * Spec: `docs/UI_REDESIGN_SPEC.md` §7.7 — "Calm Precision" light theme.
  *
  * Built on the shadcn `Sheet` primitive (Radix Dialog) with
  * `side="left"`. Renders a search input, a scrollable list of
@@ -22,6 +22,10 @@
  *     onLoadProject: (project: ProjectFull) => void
  *     activeProjectId: number | null
  *   }
+ *
+ * 2026-07-04 (Phase 6 redesign) — white bg, light cards with subtle
+ * border + shadow-xs, active card = indigo left border, indigo
+ * empty-state icon.
  */
 import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -96,7 +100,7 @@ function CardSkeleton() {
   )
 }
 
-/** Empty state — amber forge icon + two-line message. */
+/** Empty state — indigo forge icon + two-line message. */
 function EmptyState() {
   return (
     <div
@@ -107,11 +111,10 @@ function EmptyState() {
         aria-hidden="true"
         className="
           flex size-12 items-center justify-center
-          rounded-md bg-primary/10 text-primary
-          shadow-[0_0_16px_oklch(0.75_0.16_70/0.2)]
+          rounded-md bg-accent text-accent-foreground
         "
       >
-        <Hammer className="size-6" />
+        <Hammer className="size-6 text-primary" />
       </span>
       <div className="font-display text-sm font-semibold text-foreground">
         No projects yet

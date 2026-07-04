@@ -1,20 +1,14 @@
 /* ---------------------------------------------------------------------------
  * Forge — fonts.css
  *
- * The actual @font-face/Google Fonts <link> tag lives in index.html
- * (preconnect + stylesheet link, with `display=swap` so text is
- * visible during font load — see Section 5 of docs/UI_DESIGN_DIRECTION.md).
+ * "Calm Precision" typography:
+ *   --font-display  → Instrument Serif   (editorial headlines)
+ *   --font-body     → Geist              (clean UI text)
+ *   --font-mono     → Geist Mono         (code, stats)
  *
- * This file is the single source of truth for the font-family
- * custom-property names used by Tailwind v4 via @theme inline in
- * index.css:
- *
- *   --font-display  → Bricolage Grotesque   (headings)
- *   --font-body     → Figtree               (UI / body)
- *   --font-mono     → Fragment Mono         (code)
- *
- * Variable-font ranges mirror the Google Fonts URL in index.html so
- * weight changes are smooth (no FOUT on weight swaps).
+ * Google Fonts <link> tags are in index.html with display=swap.
+ * Variable-font ranges let the browser interpolate any weight
+ * smoothly without FOUT on weight swaps.
  *
  * Tailwind utility mappings:
  *   font-display  → class="font-display"   (h1..h6 via @layer base)
@@ -25,10 +19,9 @@
 :root {
   /* Variable font ranges. These let the browser interpolate any
      weight in the range without re-downloading a separate file. */
-  --font-display: 'Bricolage Grotesque', system-ui, -apple-system,
-    'Segoe UI', sans-serif;
-  --font-body: 'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-mono: 'Fragment Mono', ui-monospace, 'JetBrains Mono', 'Fira Code',
+  --font-display: 'Instrument Serif', 'Georgia', 'Times New Roman', serif;
+  --font-body: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', 'Fira Code',
     Consolas, monospace;
 }
 
@@ -38,7 +31,8 @@
    in index.html. */
 @supports (font-variation-settings: normal) {
   :root {
-    --font-display-weights: 200 800;
-    --font-body-weights: 300 800;
+    --font-display-weights: 300 700;
+    --font-body-weights: 100 900;
+    --font-mono-weights: 100 900;
   }
 }

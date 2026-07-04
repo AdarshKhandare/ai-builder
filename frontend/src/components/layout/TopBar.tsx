@@ -1,27 +1,22 @@
 /**
  * TopBar — the sticky 48px header for the builder page.
  *
- * Spec (`docs/UI_DESIGN_DIRECTION.md` §9.2):
- *  - Left:   amber forge icon + "Forge" wordmark in the display font.
+ * Spec (`docs/UI_REDESIGN_SPEC.md` §7.2 — "Calm Precision"):
+ *  - Left:   indigo hammer icon (light indigo circle) + "Forge"
+ *            wordmark in Geist (clean body font, not display).
  *  - Center: project name. Empty / pre-generation → "Untitled";
  *            once a `title` SSE event arrives the value fades in
  *            in place.
  *  - Right:  model picker (shadcn Select) + History button +
  *            "New" outline button + Download outline button.
  *
- * 2026-07-03 additions:
- *  - `History` button between the model picker and the "New" button.
- *    The button is a PLACEHOLDER — the drawer is built by another
- *    agent. We only wire the onClick to the `onHistoryOpen` callback
- *    that the Builder page supplies.
+ * 2026-07-04 (Phase 5) — model picker shows name + provider with a
+ * star badge for `recommended: true` models. Items sorted
+ * (recommended first, then alphabetical). Tooltip on the trigger
+ * surfaces the currently-selected model's description.
  *
- * 2026-07-04 additions (Phase 5):
- *  - Model picker now renders a richer row per model: name +
- *    provider, with a star badge for `recommended: true` models.
- *    Items are sorted (recommended first, then alphabetical by
- *    display name) so the best choice is always at the top of
- *    the dropdown. A Tooltip on the trigger surfaces the
- *    currently-selected model's description.
+ * 2026-07-04 (Phase 6 redesign) — "Calm Precision" light theme:
+ * white card bg, subtle border-bottom, indigo accent on hover/active.
  *
  * Responsive: on viewports < 640px the project name and the History
  * label collapse to icons-only so the logo, model picker, history,
@@ -125,13 +120,12 @@ function Logo() {
         aria-hidden="true"
         className="
           flex size-7 items-center justify-center
-          rounded-md bg-primary/10 text-primary
-          shadow-[0_0_12px_oklch(0.75_0.16_70/0.25)]
+          rounded-md bg-accent text-accent-foreground
         "
       >
-        <Hammer className="size-4" />
+        <Hammer className="size-4 text-primary" />
       </span>
-      <span className="font-display text-base font-bold text-primary tracking-tight">
+      <span className="font-body text-base font-semibold text-foreground tracking-tight">
         Forge
       </span>
     </div>

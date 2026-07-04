@@ -32,6 +32,12 @@
  *    placeholder ("Describe what you want to build…" vs "Ask for
  *    changes…") and the streaming-status copy ("Planning…" /
  *    "Generating…" / "Iterating…").
+ *
+ * 2026-07-04 (Phase 6 redesign) — "Calm Precision" light theme:
+ * white bg, user bubbles = light indigo tint (`bg-primary/10`),
+ * assistant bubbles = `bg-muted`, rounded-2xl, indigo streaming dot.
+ * Empty state: Instrument Serif heading + suggestion chips with
+ * `--secondary` background.
  */
 import {
   useEffect,
@@ -431,11 +437,10 @@ function FullWidthEmptyState({ onSuggestion, isStreaming }: EmptyStateProps) {
           aria-hidden="true"
           className="
             flex size-14 items-center justify-center rounded-2xl
-            bg-primary/10 text-primary
-            shadow-[0_0_24px_oklch(0.75_0.16_70/0.25)]
+            bg-accent text-accent-foreground
           "
         >
-          <Hammer className="size-7" />
+          <Hammer className="size-7 text-primary" />
         </span>
 
         <div className="flex flex-col items-center gap-2">

@@ -1,6 +1,6 @@
 /**
  * SyntaxHighlighter — a thin wrapper around `prism-react-renderer` that
- * renders generated code with a custom "Obsidian Forge" theme.
+ * renders generated code with a custom "Calm Precision" light theme.
  *
  * Why prism-react-renderer over shiki: the code panel streams updates
  * from the SSE hook (sometimes dozens per second). Prism tokenizes
@@ -8,23 +8,29 @@
  * grammars over the full text on every update — too expensive for
  * a streaming code surface.
  *
- * Token colors follow the Obsidian Forge palette defined in
- * `index.css`:
- *   - keywords / tags (HTML)   → amber (--primary)
+ * Token colors follow the "Calm Precision" design system defined in
+ * `index.css` (light, indigo accent):
+ *   - keywords / tags (HTML)   → indigo (--primary)
  *   - strings / attributes     → green (--success)
  *   - comments                 → muted-foreground
+ *   - tags                     → blue (--info)
+ *   - numbers                  → blue (--info)
  *   - plain text               → foreground
  *
  * Renders a per-line layout: line-number gutter on the left (right-
  * aligned, dimmed, non-selectable) + code tokens on the right. The
  * outer container handles vertical scroll; the inner pre handles
  * horizontal overflow for long lines.
+ *
+ * 2026-07-04 (Phase 6 redesign) — light theme; keywords are indigo
+ * (was amber), tags now blue (--info), function names use the deep
+ * indigo (--accent-foreground) for visual distinction.
  */
 import { Highlight, type PrismTheme } from 'prism-react-renderer'
 import { memo } from 'react'
 
-/** The custom theme — uses oklch values from the Obsidian Forge palette. */
-const obsidianForgeTheme: PrismTheme = {
+/** The custom theme — uses CSS custom properties from the design system. */
+const calmPrecisionTheme: PrismTheme = {
   plain: {
     color: 'var(--foreground)',
     backgroundColor: 'transparent',
@@ -40,7 +46,6 @@ const obsidianForgeTheme: PrismTheme = {
     {
       types: [
         'keyword',
-        'tag',
         'boolean',
         'atrule',
         'important',
@@ -51,16 +56,27 @@ const obsidianForgeTheme: PrismTheme = {
       },
     },
     {
+      types: ['tag'],
+      style: {
+        color: 'var(--info)',
+      },
+    },
+    {
       types: [
         'string',
         'attr-value',
-        'attr-name',
         'url',
         'entity',
         'inserted',
       ],
       style: {
         color: 'var(--success)',
+      },
+    },
+    {
+      types: ['attr-name'],
+      style: {
+        color: 'var(--accent-foreground)',
       },
     },
     {
@@ -81,10 +97,9 @@ const obsidianForgeTheme: PrismTheme = {
     {
       types: ['function', 'class-name', 'maybe-class-name'],
       style: {
-        // Slightly cooler than --primary so function names don't
-        // compete with keyword colour. Maps to the secondary amber
-        // accent in the palette.
-        color: 'var(--accent)',
+        // Deep indigo so function names don't compete with
+        // the primary (--primary) keyword colour.
+        color: 'var(--accent-foreground)',
       },
     },
     {
@@ -116,7 +131,7 @@ function SyntaxHighlighterInner({
   showLineNumbers = true,
 }: SyntaxHighlighterProps) {
   return (
-    <Highlight code={code} language={language} theme={obsidianForgeTheme}>
+    <Highlight code={code} language={language} theme={calmPrecisionTheme}>
       {({ className, style, tokens, getLineProps, getTokenProps }) => (
         <pre
           // `className` is prism-react-renderer's recommended class for

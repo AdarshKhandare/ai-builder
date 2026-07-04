@@ -2,7 +2,7 @@
  * MobileTabBar — the bottom 3-tab navigation shown on viewports
  * narrower than the tablet breakpoint (< 640px).
  *
- * Three tabs (Chat / Code / Preview). The active tab gets an amber
+ * Three tabs (Chat / Code / Preview). The active tab gets an indigo
  * underline that slides between buttons via framer-motion `layoutId`.
  * The Preview tab is disabled until the first `done` SSE event fires
  * (no point showing it before code is ready).
@@ -10,6 +10,9 @@
  * 48px minimum touch targets, `env(safe-area-inset-bottom)` padding
  * for the iOS home indicator. The container is `fixed` so it stays
  * glued to the viewport bottom even when the page itself scrolls.
+ *
+ * 2026-07-04 (Phase 6 redesign) — "Calm Precision" light theme:
+ * white card bg, subtle border-top, indigo active state + underline.
  */
 import { motion, useReducedMotion } from 'framer-motion'
 import { Code, Eye, MessageSquare } from 'lucide-react'

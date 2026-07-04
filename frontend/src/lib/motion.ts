@@ -4,17 +4,14 @@
  * Shared framer-motion variants, transition presets, and the
  * `useReducedMotionSafe` helper. Every component that animates
  * imports from here so the motion language is centralized and
- * matches docs/UI_DESIGN_DIRECTION.md §6 / §8.
+ * matches the "Calm Precision" design system.
  *
  * All variants use ONLY `transform` and `opacity` — no `width`,
  * `height`, `top`, `left` — so they are GPU-composited and never
- * cause layout thrash (see design doc §8 "Performance rules").
+ * cause layout thrash.
  *
  * Importing from "framer-motion" because that is the installed
- * dependency in this project. The "motion/react" entry point is
- * also installed (via the `motion` package) and exports the same
- * API, so the import path can be flipped later without touching
- * any consumer.
+ * dependency in this project.
  */
 
 import type { Transition, Variants } from 'framer-motion'
@@ -22,12 +19,10 @@ import type { Transition, Variants } from 'framer-motion'
 /* ---------------------------------------------------------------------------
  * Spring transition presets
  *
- * The design doc §6 specifies three spring profiles:
+ * Three spring profiles:
  *   - spring-default  → general layout / panel transitions
- *   - spring-gentle   → reveals, page enters, soft motion
- *   - spring-snappy   → button presses, tooltips, quick interactions
- *
- * Use these as the `transition` prop on motion components.
+ *   - gentleSpring    → reveals, page enters, soft motion
+ *   - snappySpring    → button presses, tooltips, quick interactions
  * --------------------------------------------------------------------------- */
 
 export const springTransition: Transition = {
@@ -51,7 +46,11 @@ export const snappySpring: Transition = {
 /* ---------------------------------------------------------------------------
  * Duration / easing presets (for non-spring transitions)
  *
- * Mirrors design doc §6 motion tokens.
+ * "Calm Precision" motion tokens:
+ *   - Fast (150ms): micro-interactions, tooltips
+ *   - Normal (200ms): standard enters, reveals
+ *   - Slow (300ms): larger transitions, page enters
+ *   - Exit (120ms): exits are faster than enters
  * --------------------------------------------------------------------------- */
 
 export const durationFast: Transition = { duration: 0.15, ease: 'easeOut' }
@@ -70,15 +69,15 @@ export const durationExit: Transition = { duration: 0.12, ease: 'easeIn' }
  * content entering view. Pairs with AnimatePresence for enter/exit.
  */
 export const fadeInUp: Variants = {
-  initial: { opacity: 0, y: 20 },
+  initial: { opacity: 0, y: 12 },
   animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -10 },
+  exit: { opacity: 0, y: -6 },
 }
 
 /**
  * staggerContainer — wraps a list whose children use the
  * `fadeInUp` variant (or any variant with the matching names).
- * Children animate 50ms apart — the design doc's "stagger" token.
+ * Children animate 50ms apart.
  */
 export const staggerContainer: Variants = {
   initial: { opacity: 0 },
@@ -104,27 +103,26 @@ export const staggerContainer: Variants = {
  * Slight x-translation gives a "sliding into place" feel.
  */
 export const panelSlide: Variants = {
-  initial: { opacity: 0, x: -12 },
+  initial: { opacity: 0, x: -8 },
   animate: { opacity: 1, x: 0 },
-  exit: { opacity: 0, x: 12 },
+  exit: { opacity: 0, x: 8 },
 }
 
 /**
  * panelSlideRight — mirror of panelSlide for right-side panels.
  */
 export const panelSlideRight: Variants = {
-  initial: { opacity: 0, x: 12 },
+  initial: { opacity: 0, x: 8 },
   animate: { opacity: 1, x: 0 },
-  exit: { opacity: 0, x: -12 },
+  exit: { opacity: 0, x: -8 },
 }
 
 /**
  * modalEnter — used by Dialog/Sheet modals. Scale + fade from
- * center. Spring enter, fast ease-in exit (design doc: "exit
- * faster than enter").
+ * center. Spring enter, fast ease-in exit (exit faster than enter).
  */
 export const modalEnter: Variants = {
-  initial: { opacity: 0, scale: 0.96 },
+  initial: { opacity: 0, scale: 0.97 },
   animate: { opacity: 1, scale: 1 },
   exit: { opacity: 0, scale: 0.98 },
 }
@@ -133,9 +131,9 @@ export const modalEnter: Variants = {
  * toastSlide — toasts enter from below, exit by fading.
  */
 export const toastSlide: Variants = {
-  initial: { opacity: 0, y: 24 },
+  initial: { opacity: 0, y: 16 },
   animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: 8 },
+  exit: { opacity: 0, y: 6 },
 }
 
 /**
@@ -159,13 +157,13 @@ export const tabIndicator: Variants = {
  * --------------------------------------------------------------------------- */
 
 export const buttonTap = {
-  whileHover: { scale: 1.02 },
+  whileHover: { scale: 1.01 },
   whileTap: { scale: 0.98 },
   transition: springTransition,
 } as const
 
 export const cardHover = {
-  whileHover: { y: -2 },
+  whileHover: { y: -1 },
   transition: springTransition,
 } as const
 
@@ -178,7 +176,7 @@ export const cardHover = {
  *   {items.map((item, i) => (
  *     <motion.div
  *       key={item.id}
- *       initial={{ opacity: 0, y: 20 }}
+ *       initial={{ opacity: 0, y: 12 }}
  *       animate={{ opacity: 1, y: 0 }}
  *       transition={staggerDelay(i)}
  *     />

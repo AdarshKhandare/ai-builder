@@ -1,20 +1,19 @@
 /* ---------------------------------------------------------------------------
  * Forge — index.css
  *
- * The single source of truth for the Obsidian Forge design system.
- * Implements Section 4 of docs/UI_DESIGN_DIRECTION.md verbatim,
- * with the global resets and component-layer utilities the rest
- * of the app needs.
+ * The single source of truth for the Forge design system.
+ * "Calm Precision" — light, clean, professional SaaS aesthetic.
+ * Inspired by v0.dev, Linear, Lovable. NOT the old dark amber theme.
  *
  * Layer order (top to bottom):
  *   1. Tailwind + animate.css plugins
  *   2. Global styles (fonts, scrollbar, animations)
  *   3. @theme inline — bridges :root tokens → Tailwind utilities
- *   4. :root  — dark-mode token values (default)
- *   5. .light — light-mode token overrides
+ *   4. :root  — light-mode token values (default)
+ *   5. .dark  — dark-mode token overrides
  *   6. @layer base     — element resets
- *   7. @layer components — small utility classes used by shadcn/
- *      custom components (scrollable, glow, blink-cursor, etc.)
+ *   7. @layer components — small utility classes
+ *   8. @layer utilities — opinionated one-off utilities
  * --------------------------------------------------------------------------- */
 
 @import 'tailwindcss';
@@ -27,10 +26,9 @@
 /* ---------------------------------------------------------------------------
  * Dark variant
  *
- * The design system is dark-first (:root is dark, .light is the
- * override). The @custom-variant below is kept so shadcn-style
- * `dark:` Tailwind utilities still work for one-off tweaks, but
- * the default is already dark.
+ * Light-first design system. The default (:root) is light.
+ * Add `.dark` class to <html> to switch to dark mode.
+ * The @custom-variant enables shadcn-style `dark:` utilities.
  * --------------------------------------------------------------------------- */
 
 @custom-variant dark (&:is(.dark *));
@@ -38,9 +36,9 @@
 /* ---------------------------------------------------------------------------
  * @theme inline — bridges :root tokens → Tailwind utility classes
  *
- * This is what makes `bg-primary`, `text-foreground`, `font-display`,
- * `shadow-glow` etc. resolve at the utility-class layer. Token VALUES
- * are still defined on :root and .light below.
+ * This makes `bg-primary`, `text-foreground`, `font-display`, etc.
+ * resolve at the utility-class layer. Token VALUES are defined on
+ * :root (light) and .dark below.
  * --------------------------------------------------------------------------- */
 
 @theme inline {
@@ -71,7 +69,6 @@
   --color-info: var(--info);
   --color-background-sunken: var(--background-sunken);
   --color-border-subtle: var(--border-subtle);
-  --color-primary-glow: var(--primary-glow);
 
   /* ─── Chart tokens (shadcn convention) ─── */
   --color-chart-1: var(--chart-1);
@@ -103,210 +100,179 @@
   --font-mono: var(--font-mono);
 
   /* ─── Custom shadows ─── */
-  --shadow-glow: 0 0 20px oklch(0.75 0.16 70 / 0.15);
-  --shadow-glow-lg: 0 0 40px oklch(0.75 0.16 70 / 0.25);
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.03);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.05), 0 4px 6px -4px rgb(0 0 0 / 0.05);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.05), 0 8px 10px -6px rgb(0 0 0 / 0.05);
 
   /* ─── Custom animations ─── */
   --animate-shimmer: shimmer 2s ease-in-out infinite;
-  --animate-pulse-amber: pulse-amber 1.5s ease-in-out infinite;
-  --animate-fade-in: fade-in 0.3s ease-out;
-  --animate-slide-up: slide-up 0.3s ease-out;
-  --animate-slide-in: slide-in 0.3s ease-out;
+  --animate-fade-in: fade-in 0.2s ease-out;
+  --animate-slide-up: slide-up 0.2s ease-out;
+  --animate-slide-in: slide-in 0.2s ease-out;
   --animate-blink-cursor: blink-cursor 1s steps(2) infinite;
-  --animate-glow-pulse: glow-pulse 1.6s ease-in-out infinite;
-  --animate-spin-slow: spin-slow 12s linear infinite;
+  --animate-pulse-subtle: pulse-subtle 2s ease-in-out infinite;
 
   @keyframes shimmer {
-    0% {
-      background-position: -200% 0;
-    }
-    100% {
-      background-position: 200% 0;
-    }
-  }
-  @keyframes pulse-amber {
-    0%,
-    100% {
-      opacity: 0.4;
-    }
-    50% {
-      opacity: 1;
-    }
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
   }
   @keyframes fade-in {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
   @keyframes slide-up {
-    from {
-      opacity: 0;
-      transform: translateY(8px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
   }
   @keyframes slide-in {
-    from {
-      opacity: 0;
-      transform: translateY(8px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
   }
   @keyframes blink-cursor {
-    0%,
-    49% {
-      opacity: 1;
-    }
-    50%,
-    100% {
-      opacity: 0;
-    }
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0; }
   }
-  @keyframes glow-pulse {
-    0%,
-    100% {
-      box-shadow: 0 0 20px oklch(0.75 0.16 70 / 0.15);
-    }
-    50% {
-      box-shadow: 0 0 40px oklch(0.75 0.16 70 / 0.45);
-    }
-  }
-  @keyframes spin-slow {
-    from {
-      transform: rotate(0deg);
-    }
-    to {
-      transform: rotate(360deg);
-    }
+  @keyframes pulse-subtle {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
   }
 }
 
 /* ---------------------------------------------------------------------------
- * :root — dark mode (default)
+ * :root — light mode (default)
  *
- * All values in oklch for perceptual uniformity. See
- * docs/UI_DESIGN_DIRECTION.md §3 for the full palette rationale and
- * §4 for these exact values.
+ * "Calm Precision" — white/near-white backgrounds, deep charcoal text,
+ * indigo accent. All values in oklch for perceptual uniformity.
  * --------------------------------------------------------------------------- */
 
 :root {
   --radius: 0.5rem;
 
-  --background: oklch(0.13 0.005 260);
-  --foreground: oklch(0.93 0.01 260);
-  --card: oklch(0.17 0.008 260);
-  --card-foreground: oklch(0.93 0.01 260);
-  --popover: oklch(0.19 0.01 260);
-  --popover-foreground: oklch(0.93 0.01 260);
-  --primary: oklch(0.75 0.16 70);
-  --primary-foreground: oklch(0.2 0.05 70);
-  --secondary: oklch(0.22 0.012 260);
-  --secondary-foreground: oklch(0.85 0.01 260);
-  --muted: oklch(0.19 0.008 260);
-  --muted-foreground: oklch(0.55 0.015 260);
-  --accent: oklch(0.7 0.14 70);
-  --accent-foreground: oklch(0.98 0.01 70);
-  --destructive: oklch(0.65 0.2 25);
-  --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.26 0.015 260);
-  --input: oklch(0.22 0.012 260);
-  --ring: oklch(0.75 0.16 70 / 0.4);
-
-  /* Extended — Forge-specific, not in shadcn default */
-  --success: oklch(0.62 0.17 155);
-  --warning: oklch(0.8 0.16 84);
-  --info: oklch(0.65 0.15 250);
-  --background-sunken: oklch(0.1 0.005 260);
-  --border-subtle: oklch(0.2 0.01 260);
-  --primary-glow: oklch(0.75 0.16 70 / 0.15);
-
-  /* Chart palette */
-  --chart-1: oklch(0.75 0.16 70); /* amber */
-  --chart-2: oklch(0.62 0.17 155); /* green */
-  --chart-3: oklch(0.65 0.15 250); /* blue */
-  --chart-4: oklch(0.65 0.2 25); /* red */
-  --chart-5: oklch(0.7 0.14 310); /* purple */
-
-  /* Sidebar */
-  --sidebar: oklch(0.15 0.006 260);
-  --sidebar-foreground: oklch(0.93 0.01 260);
-  --sidebar-primary: oklch(0.75 0.16 70);
-  --sidebar-primary-foreground: oklch(0.2 0.05 70);
-  --sidebar-accent: oklch(0.22 0.012 260);
-  --sidebar-accent-foreground: oklch(0.85 0.01 260);
-  --sidebar-border: oklch(0.26 0.015 260);
-  --sidebar-ring: oklch(0.75 0.16 70 / 0.4);
-
-  color-scheme: dark;
-}
-
-/* ---------------------------------------------------------------------------
- * .light — light mode token overrides
- *
- * Toggle by adding the `.light` class to <html>. The default
- * (no class on <html>, or `.dark`) is dark.
- * --------------------------------------------------------------------------- */
-
-.light {
-  --background: oklch(0.98 0.005 70);
-  --foreground: oklch(0.15 0.01 260);
+  /* Core surfaces */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.14 0.005 285);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.15 0.01 260);
+  --card-foreground: oklch(0.14 0.005 285);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.15 0.01 260);
-  --primary: oklch(0.65 0.18 55);
+  --popover-foreground: oklch(0.14 0.005 285);
+
+  /* Primary — indigo accent */
+  --primary: oklch(0.55 0.2 270);
   --primary-foreground: oklch(0.98 0 0);
-  --secondary: oklch(0.94 0.008 260);
-  --secondary-foreground: oklch(0.2 0.01 260);
-  --muted: oklch(0.95 0.005 260);
-  --muted-foreground: oklch(0.48 0.015 260);
-  --accent: oklch(0.6 0.15 55);
-  --accent-foreground: oklch(0.98 0 0);
+
+  /* Secondary — soft gray */
+  --secondary: oklch(0.96 0.005 285);
+  --secondary-foreground: oklch(0.2 0.005 285);
+
+  /* Muted — subtle backgrounds */
+  --muted: oklch(0.97 0.003 285);
+  --muted-foreground: oklch(0.55 0.01 285);
+
+  /* Accent — lighter indigo for hover states */
+  --accent: oklch(0.94 0.02 270);
+  --accent-foreground: oklch(0.3 0.05 270);
+
+  /* Destructive — red */
   --destructive: oklch(0.55 0.22 25);
   --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.9 0.008 260);
-  --input: oklch(0.9 0.008 260);
-  --ring: oklch(0.65 0.18 55 / 0.3);
-  --success: oklch(0.55 0.15 155);
+
+  /* Borders — subtle, not heavy */
+  --border: oklch(0.92 0.005 285);
+  --input: oklch(0.92 0.005 285);
+  --ring: oklch(0.55 0.2 270 / 0.3);
+
+  /* Extended — Forge-specific */
+  --success: oklch(0.6 0.17 155);
   --warning: oklch(0.75 0.16 84);
-  --info: oklch(0.55 0.15 250);
-  --background-sunken: oklch(0.95 0.005 260);
-  --border-subtle: oklch(0.93 0.005 260);
-  --primary-glow: oklch(0.65 0.18 55 / 0.1);
+  --info: oklch(0.6 0.15 250);
+  --background-sunken: oklch(0.98 0.002 285);
+  --border-subtle: oklch(0.95 0.003 285);
 
-  --chart-1: oklch(0.65 0.18 55);
-  --chart-2: oklch(0.55 0.15 155);
-  --chart-3: oklch(0.55 0.15 250);
-  --chart-4: oklch(0.55 0.22 25);
-  --chart-5: oklch(0.6 0.15 310);
+  /* Chart palette */
+  --chart-1: oklch(0.55 0.2 270); /* indigo */
+  --chart-2: oklch(0.6 0.17 155); /* green */
+  --chart-3: oklch(0.6 0.15 250); /* blue */
+  --chart-4: oklch(0.55 0.22 25); /* red */
+  --chart-5: oklch(0.6 0.15 310); /* purple */
 
-  --sidebar: oklch(0.97 0.005 70);
-  --sidebar-foreground: oklch(0.15 0.01 260);
-  --sidebar-primary: oklch(0.65 0.18 55);
+  /* Sidebar */
+  --sidebar: oklch(0.99 0.002 285);
+  --sidebar-foreground: oklch(0.14 0.005 285);
+  --sidebar-primary: oklch(0.55 0.2 270);
   --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.94 0.008 260);
-  --sidebar-accent-foreground: oklch(0.2 0.01 260);
-  --sidebar-border: oklch(0.9 0.008 260);
-  --sidebar-ring: oklch(0.65 0.18 55 / 0.3);
+  --sidebar-accent: oklch(0.96 0.005 285);
+  --sidebar-accent-foreground: oklch(0.2 0.005 285);
+  --sidebar-border: oklch(0.92 0.005 285);
+  --sidebar-ring: oklch(0.55 0.2 270 / 0.3);
 
   color-scheme: light;
 }
 
 /* ---------------------------------------------------------------------------
+ * .dark — dark mode token overrides
+ *
+ * Dark mode is secondary. Deep charcoal backgrounds, soft white text,
+ * indigo accent (slightly brighter for contrast on dark).
+ * --------------------------------------------------------------------------- */
+
+.dark {
+  --background: oklch(0.14 0.005 285);
+  --foreground: oklch(0.93 0.005 285);
+  --card: oklch(0.18 0.005 285);
+  --card-foreground: oklch(0.93 0.005 285);
+  --popover: oklch(0.2 0.005 285);
+  --popover-foreground: oklch(0.93 0.005 285);
+
+  --primary: oklch(0.65 0.2 270);
+  --primary-foreground: oklch(0.98 0 0);
+
+  --secondary: oklch(0.22 0.005 285);
+  --secondary-foreground: oklch(0.85 0.005 285);
+
+  --muted: oklch(0.22 0.005 285);
+  --muted-foreground: oklch(0.6 0.01 285);
+
+  --accent: oklch(0.25 0.02 270);
+  --accent-foreground: oklch(0.9 0.02 270);
+
+  --destructive: oklch(0.6 0.22 25);
+  --destructive-foreground: oklch(0.98 0 0);
+
+  --border: oklch(0.28 0.008 285);
+  --input: oklch(0.22 0.005 285);
+  --ring: oklch(0.65 0.2 270 / 0.4);
+
+  --success: oklch(0.65 0.17 155);
+  --warning: oklch(0.8 0.16 84);
+  --info: oklch(0.65 0.15 250);
+  --background-sunken: oklch(0.12 0.005 285);
+  --border-subtle: oklch(0.22 0.005 285);
+
+  --chart-1: oklch(0.65 0.2 270);
+  --chart-2: oklch(0.65 0.17 155);
+  --chart-3: oklch(0.65 0.15 250);
+  --chart-4: oklch(0.6 0.22 25);
+  --chart-5: oklch(0.65 0.15 310);
+
+  --sidebar: oklch(0.16 0.005 285);
+  --sidebar-foreground: oklch(0.93 0.005 285);
+  --sidebar-primary: oklch(0.65 0.2 270);
+  --sidebar-primary-foreground: oklch(0.98 0 0);
+  --sidebar-accent: oklch(0.22 0.005 285);
+  --sidebar-accent-foreground: oklch(0.85 0.005 285);
+  --sidebar-border: oklch(0.28 0.008 285);
+  --sidebar-ring: oklch(0.65 0.2 270 / 0.4);
+
+  color-scheme: dark;
+}
+
+/* ---------------------------------------------------------------------------
  * @layer base — element-level resets
  *
- * Mirrors the shadcn/ui new-york preset's base layer so all
- * shadcn primitives (Button, Card, Input, Dialog, etc.) render
- * with the correct borders, rings, and typography out of the box.
+ * Mirrors shadcn/ui new-york preset base layer so all shadcn
+ * primitives render correctly out of the box.
  * --------------------------------------------------------------------------- */
 
 @layer base {
@@ -322,8 +288,6 @@
   }
 
   html {
-    /* Use dvh on supporting browsers to avoid the iOS Safari
-       100vh jump when the URL bar collapses. */
     min-height: 100dvh;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
@@ -341,22 +305,14 @@
     text-rendering: optimizeLegibility;
   }
 
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
+  h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
     font-weight: 600;
     letter-spacing: -0.01em;
     color: var(--foreground);
   }
 
-  code,
-  pre,
-  kbd,
-  samp {
+  code, pre, kbd, samp {
     font-family: var(--font-mono);
     font-size: 0.9em;
   }
@@ -368,18 +324,15 @@
     border-radius: calc(var(--radius) * 0.5);
   }
 
-  /* Custom selection color — the amber accent. */
+  /* Selection color — indigo accent. */
   ::selection {
-    background-color: color-mix(in oklch, var(--primary) 35%, transparent);
+    background-color: color-mix(in oklch, var(--primary) 25%, transparent);
     color: var(--foreground);
   }
 }
 
 /* ---------------------------------------------------------------------------
  * @layer components — small utility classes used by Forge components
- *
- * These are component-layer so they can still be overridden by
- * utility classes in the markup (e.g. `className="bg-card scrollable"`).
  * --------------------------------------------------------------------------- */
 
 @layer components {
@@ -400,15 +353,6 @@
     border-color: var(--border-subtle);
   }
 
-  /* Primary button glow — signature Forge touch. */
-  .glow-primary {
-    box-shadow: var(--shadow-glow);
-    transition: box-shadow 200ms ease-out, transform 200ms ease-out;
-  }
-  .glow-primary:hover {
-    box-shadow: var(--shadow-glow-lg);
-  }
-
   /* Skeleton loader — uses the shimmer animation. */
   .skeleton {
     background: linear-gradient(
@@ -427,14 +371,9 @@
     animation: blink-cursor 1s steps(2) infinite;
   }
 
-  /* Pulsing amber dot for "thinking" states. */
-  .pulse-amber {
-    animation: pulse-amber 1.5s ease-in-out infinite;
-  }
-
-  /* Faded-amber background tint for active generation states. */
-  .surface-glow {
-    background-color: color-mix(in oklch, var(--primary) 6%, var(--background));
+  /* Subtle pulse for "thinking" states. */
+  .pulse-subtle {
+    animation: pulse-subtle 2s ease-in-out infinite;
   }
 }
 
@@ -462,13 +401,7 @@
  * react-resizable-panels — separator (drag handle) styles
  *
  * `react-resizable-panels` v4+ renders the `<Separator>` as a `<div>`
- * with the `data-separator` attribute reflecting its current state
- * (`"inactive" | "hover" | "active" | "focus" | "disabled"`). The
- * inline Tailwind classes on `<Separator>` in PanelLayout.tsx cover
- * the hover/active/focus colours, but this CSS block provides a
- * defence-in-depth baseline and the subtle amber glow while dragging.
- *
- * Spec: docs/BUILDER_REDESIGN_SPEC.md §2.5.
+ * with the `data-separator` attribute reflecting its current state.
  * --------------------------------------------------------------------------- */
 
 [data-group] > [data-separator] {
@@ -485,7 +418,7 @@
 
 [data-group] > [data-separator][data-separator='active'] {
   background-color: var(--primary);
-  box-shadow: 0 0 8px oklch(0.75 0.16 70 / 0.3);
+  box-shadow: 0 0 8px oklch(0.55 0.2 270 / 0.3);
 }
 
 [data-group] > [data-separator][data-separator='focus'] {

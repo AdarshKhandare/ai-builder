@@ -1,8 +1,8 @@
 /**
- * GenerationProgressBar — a 2px amber bar shown below the TopBar
+ * GenerationProgressBar — a 2px indigo bar shown below the TopBar
  * while a generation is in flight.
  *
- * The bar uses an indeterminate animation: a 30%-wide amber segment
+ * The bar uses an indeterminate animation: a 30%-wide indigo segment
  * slides from left to right repeatedly. This is the same pattern
  * that native browsers use for "loading" states and reads as "active
  * work" without claiming any specific progress percentage (the SSE
@@ -11,6 +11,9 @@
  * Mounted at the top of the builder shell, just under the TopBar.
  * Render nothing when `isStreaming` is `false` so it doesn't take
  * any vertical space between generations.
+ *
+ * 2026-07-04 (Phase 6 redesign) — "Calm Precision" light theme:
+ * indigo progress segment (was amber), subtle shadow-sm (no glow).
  */
 import { AnimatePresence, motion } from 'framer-motion'
 import { useReducedMotion } from 'framer-motion'
@@ -32,8 +35,8 @@ export function GenerationProgressBar({ isStreaming }: GenerationProgressBarProp
         {isStreaming && (
           <motion.div
             key="progress-bar"
-            // The bar itself: a 30%-wide amber block. We animate its
-            // `left` percentage so it appears to slide from -30% to
+            // The bar itself: a 30%-wide indigo block. We animate its
+            // `x` percentage so it appears to slide from -30% to
             // 100% of the container width.
             initial={{ x: '-30%' }}
             animate={
@@ -50,7 +53,6 @@ export function GenerationProgressBar({ isStreaming }: GenerationProgressBarProp
             className="
               absolute inset-y-0 left-0
               w-[30%] bg-primary
-              shadow-[0_0_8px_oklch(0.75_0.16_70/0.5)]
             "
             style={{ willChange: 'transform' }}
           />

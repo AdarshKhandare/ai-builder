@@ -1,13 +1,13 @@
 /**
  * PanelLayout — the responsive builder shell.
  *
- * Implements the new 2-column resizable layout from
- * `docs/BUILDER_REDESIGN_SPEC.md` §2:
+ * Implements the 2-column resizable layout from
+ * `docs/BUILDER_REDESIGN_SPEC.md` §7.7 — "Calm Precision" light theme:
  *
  *   Desktop / Tablet (≥ 640px):
  *     - 2-column Group from `react-resizable-panels`:
  *         Panel 1: Chat (resizable, default 35% desktop / 40% tablet)
- *         Separator: 4px drag handle, amber on hover/active/focus
+ *         Separator: 4px drag handle, indigo on hover/active/focus
  *         Panel 2: Right column (CodePreviewTabs — Code/Preview tabs)
  *     - Before the first prompt (`showCode=false`) the right column
  *       is NOT rendered; the chat fills the shell.
@@ -23,6 +23,9 @@
  * is persistent so that position memory is implicit, and on "New
  * Project" we deliberately want a fresh start with no remembered
  * layout anyway.
+ *
+ * 2026-07-04 (Phase 6 redesign) — white bg, subtle border separators,
+ * indigo on hover/active. Kept 2-column resizable layout.
  */
 import {
   Group,
@@ -145,7 +148,7 @@ function TwoColumnLayout({
           hover:bg-primary
           data-[separator=hover]:bg-primary
           data-[separator=active]:bg-primary
-          data-[separator=active]:shadow-[0_0_8px_oklch(0.75_0.16_70/0.3)]
+          data-[separator=active]:shadow-sm
           data-[separator=focus]:bg-primary
           data-[separator=focus]:outline data-[separator=focus]:outline-2
           data-[separator=focus]:outline-ring

@@ -2,11 +2,11 @@
  * StatusBar — 28px footer strip with model, status, cost, and
  * timing info.
  *
- * Spec (`docs/UI_DESIGN_DIRECTION.md` §9.3):
+ * Spec (`docs/UI_REDESIGN_SPEC.md` §7.6 — "Calm Precision"):
  *  - Left:    model name with the `opencode-go/` provider prefix
  *             stripped for display.
  *  - Center:  status indicator (idle = "Ready", streaming = pulsing
- *             amber dot + status text).
+ *             indigo dot + status text).
  *  - Right:   combined stats line — `~$0.0024 · minimax-m3 · 1.2s`
  *             after a completed run, or just the model + time
  *             when pricing is unavailable, or just the time when
@@ -14,12 +14,14 @@
  *             estimate based on the model's per-MTok pricing
  *             and a rough `code.length / 4` token heuristic.
  *
- * 2026-07-04 additions (Phase 5):
- *  - The right side now renders the consolidated
- *    `cost · model · time` mono string. The model in the right
- *    string is the *short* name (provider prefix stripped and
- *    lowercased) so the right side is self-contained and doesn't
- *    rely on the left-side label.
+ * 2026-07-04 (Phase 5) — the right side renders the consolidated
+ * `cost · model · time` mono string. The model in the right
+ * string is the *short* name (provider prefix stripped and
+ * lowercased) so the right side is self-contained and doesn't
+ * rely on the left-side label.
+ *
+ * 2026-07-04 (Phase 6 redesign) — light theme: white card bg, subtle
+ * border-top, mono 11px muted text, indigo streaming dot.
  */
 
 import { useEffect, useState } from 'react'

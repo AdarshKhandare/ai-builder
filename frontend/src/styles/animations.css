@@ -5,120 +5,59 @@
  * tokens (see index.css) and by framer-motion variants in
  * src/lib/motion.ts.
  *
- * Design intent (see docs/UI_DESIGN_DIRECTION.md §6 & §8):
+ * Design intent ("Calm Precision"):
  *   - Only animate `transform` and `opacity` (GPU-composited, cheap)
  *   - Respect `prefers-reduced-motion: reduce` — every animation is
  *     collapsed to its end state
  *   - No infinite animations on layout (only on the shimmer/pulse
  *     affordances where they are meaningful)
- *
- * The keyframes here are the *CSS-side* half. The framer-motion
- * variants (fadeInUp, panelSlide, etc.) live in src/lib/motion.ts
- * and handle the JS-driven motion (enter/exit, layout, gestures).
+ *   - Subtle, purposeful motion — never decorative-only
  * --------------------------------------------------------------------------- */
 
 /* ─── shimmer ───────────────────────────────────────────────────────
-   Used by skeleton loaders and the "thinking" code panel.
-   Background gradient slides left → right. */
+   Used by skeleton loaders. Background gradient slides left → right. */
 @keyframes shimmer {
-  0% {
-    background-position: -200% 0;
-  }
-  100% {
-    background-position: 200% 0;
-  }
-}
-
-/* ─── pulse-amber ───────────────────────────────────────────────────
-   Used by the status-bar "Thinking" dot and the chat empty-state
-   forge icon. Opacity-only, gentle. */
-@keyframes pulse-amber {
-  0%,
-  100% {
-    opacity: 0.4;
-  }
-  50% {
-    opacity: 1;
-  }
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
 }
 
 /* ─── blink-cursor ──────────────────────────────────────────────────
-   Used by the code-panel empty state ("// Your code will appear here")
-   and the streaming code caret. Hard step, no easing. */
+   Used by the code-panel empty state and the streaming code caret.
+   Hard step, no easing. */
 @keyframes blink-cursor {
-  0%,
-  49% {
-    opacity: 1;
-  }
-  50%,
-  100% {
-    opacity: 0;
-  }
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
 }
 
 /* ─── slide-in ──────────────────────────────────────────────────────
    Used by toasts and panel headers entering from off-screen.
    Transform + opacity only. */
 @keyframes slide-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* ─── fade-in ───────────────────────────────────────────────────────
    Generic opacity reveal. Used by overlay backdrops and modals. */
 @keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* ─── slide-up ──────────────────────────────────────────────────────
-   Slightly larger enter distance than slide-in. Used by the chat
-   empty-state and code-line entries. */
+   Slightly larger enter distance than slide-in. Used by chat
+   messages and content blocks. */
 @keyframes slide-up {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-/* ─── glow-pulse ────────────────────────────────────────────────────
-   Signature amber-glow pulse on primary buttons when they finish a
-   generation. Uses box-shadow so the glow extends past the element
-   without affecting layout. */
-@keyframes glow-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 20px oklch(0.75 0.16 70 / 0.15);
-  }
-  50% {
-    box-shadow: 0 0 40px oklch(0.75 0.16 70 / 0.45);
-  }
-}
-
-/* ─── spin-slow ─────────────────────────────────────────────────────
-   Reserved for the landing-page hero grid lines. Not used on UI
-   chrome. 12s rotation, linear, infinite. */
-@keyframes spin-slow {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+/* ─── pulse-subtle ──────────────────────────────────────────────────
+   Gentle opacity pulse for "thinking" / streaming indicators.
+   Softer than the old amber pulse — matches the calm aesthetic. */
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
 }
 
 /* ─── Reduced-motion overrides ──────────────────────────────────────
@@ -135,9 +74,6 @@
   }
 
   @keyframes blink-cursor {
-    0%,
-    100% {
-      opacity: 1;
-    }
+    0%, 100% { opacity: 1; }
   }
 }

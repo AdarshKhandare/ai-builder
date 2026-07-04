@@ -13,6 +13,11 @@
  * so the line numbers stay glued to the left edge of the wrapper
  * during vertical scroll — but also scroll horizontally WITH the code
  * when a long line is wider than the panel.
+ *
+ * 2026-07-04 (Phase 6 redesign) — "Calm Precision" light theme:
+ * `bg-background-sunken` (very light gray) for the code area,
+ * light syntax highlighting theme (indigo keywords, green strings,
+ * muted comments, blue tags). Indigo streaming dot.
  */
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'

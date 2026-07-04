@@ -1,7 +1,7 @@
 /**
  * Tests for `src/components/layout/GenerationProgressBar.tsx`.
  *
- * The progress bar is a 2px-tall wrapper with an animated amber
+ * The progress bar is a 2px-tall wrapper with an animated indigo
  * segment. When `isStreaming` is `false` the inner `motion.div` is
  * not rendered (framer-motion's `AnimatePresence` is empty). When
  * `isStreaming` is `true` the inner `motion.div` appears.

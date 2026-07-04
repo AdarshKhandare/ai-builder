@@ -645,7 +645,7 @@ export function Builder() {
         hasDownload={code.trim().length > 0}
       />
 
-      {/* Thin amber progress bar — only visible while streaming. */}
+      {/* Thin indigo progress bar — only visible while streaming. */}
       <GenerationProgressBar isStreaming={isStreaming} />
 
       <div className="relative flex-1 overflow-hidden">

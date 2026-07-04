@@ -27,6 +27,13 @@ function looksLikeHtmlCode(content: string): boolean {
   return true
 }
 
+/**
+ * Bubble base styles — rounded-2xl with a subtle corner bias toward
+ * the speaker (user bubbles have a tighter bottom-right corner,
+ * assistant bubbles a tighter bottom-left). Matches the "Calm
+ * Precision" design system: white card bg, light indigo tint for
+ * user messages, --muted for assistant messages.
+ */
 const BUBBLE_BASE =
   'max-w-[80%] whitespace-pre-wrap break-words rounded-2xl px-3 py-3 text-sm leading-relaxed text-foreground'
 

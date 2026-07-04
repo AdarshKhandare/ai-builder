@@ -2,7 +2,7 @@
  * CodePreviewTabs — the tab toggle inside the right column of the
  * builder (desktop/tablet layouts).
  *
- * Renders two tabs (`Code` / `Preview`) with a single amber underline
+ * Renders two tabs (`Code` / `Preview`) with a single indigo underline
  * that slides between them via framer-motion `layoutId`. The active
  * tab's content is rendered inside an `AnimatePresence mode="wait"`
  * for a fast cross-fade.
@@ -10,6 +10,9 @@
  * The Preview tab is only shown after the first `done` SSE event
  * (i.e. once we have real, generated code to render). Until then the
  * right column is code-only and the tab bar is hidden.
+ *
+ * 2026-07-04 (Phase 6 redesign) — "Calm Precision" light theme:
+ * white tab bar bg, subtle border-bottom, indigo underline indicator.
  */
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Code, Eye } from 'lucide-react'
@@ -139,7 +142,7 @@ export function CodePreviewTabs({
           Icon={Eye}
         />
 
-        {/* The animated amber underline. `layoutId` makes framer-motion
+        {/* The animated indigo underline. `layoutId` makes framer-motion
             slide it between tab buttons when the active tab changes.
             When the user prefers reduced motion, we collapse the
             spring to a zero-duration instant transition. */}

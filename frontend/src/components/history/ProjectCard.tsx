@@ -6,11 +6,11 @@
  * delete button) fires `onOpen(id)`. Hovering reveals the
  * delete affordance.
  *
- * Spec: `docs/BUILDER_REDESIGN_SPEC.md` §3.4.
+ * Spec: `docs/UI_REDESIGN_SPEC.md` §7.7 — "Calm Precision" light theme.
  *
  * Visual notes:
- *  - Active card (currently loaded) gets an amber tint and border
- *    (`border-primary/30 bg-primary/5`).
+ *  - Active card (currently loaded) gets a 2px indigo left border
+ *    + a faint indigo tint background — `--primary` accent, no amber.
  *  - `whileTap` press feedback (scale 0.98) for the click affordance.
  *  - The model id arrives as `opencode-go/minimax-m3`; the prefix
  *    is stripped for display so the card stays narrow.
@@ -76,11 +76,12 @@ export function ProjectCard({
       data-active={isActive}
       data-testid="project-card"
       className={cn(
-        'group relative flex cursor-pointer flex-col gap-2 rounded-lg border p-3',
-        'border-border bg-background-sunken text-left',
-        'transition-colors hover:bg-secondary/60 hover:border-border-subtle',
+        'group relative flex cursor-pointer flex-col gap-2 rounded-lg border p-3 text-left shadow-xs',
+        'border-border bg-card',
+        'transition-colors hover:border-border-subtle hover:shadow-sm',
         'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none',
-        isActive && 'border-primary/30 bg-primary/5',
+        // Active state: indigo left border + faint indigo tint
+        isActive && 'border-l-primary border-l-2 bg-accent/50',
       )}
     >
       {/* ── Title ───────────────────────────────────────────── */}
