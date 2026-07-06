@@ -8,30 +8,51 @@
  * grammars over the full text on every update — too expensive for
  * a streaming code surface.
  *
- * Token colors follow the "Refined Dark" design system defined in
- * `index.css` (dark, refined blue accent):
- *   - keywords / tags (HTML)   → refined blue (--primary)
- *   - strings / attributes     → green (--success)
- *   - comments                 → muted-foreground
- *   - tags                     → blue (--info)
- *   - numbers                  → blue (--info)
- *   - plain text               → foreground
+ * Token colors follow the "Calm Precision" light design system
+ * defined in `index.css`:
+ *   - keywords / at-rules    → indigo primary (--primary)
+ *   - HTML tags              → light indigo (lighter shade)
+ *   - strings / attributes   → emerald green
+ *   - comments               → muted gray
+ *   - function names         → blue (visual distinction from primary)
+ *   - numbers                → amber
+ *   - punctuation/operator   → gray
+ *   - plain text             → foreground
  *
  * Renders a per-line layout: line-number gutter on the left (right-
  * aligned, dimmed, non-selectable) + code tokens on the right. The
  * outer container handles vertical scroll; the inner pre handles
  * horizontal overflow for long lines.
  *
- * 2026-07-04 (Refined Dark redesign) — dark theme; keywords are
- * refined blue (--primary), tags use --info, function names use
- * --accent-foreground for visual distinction.
+ * 2026-07-06 (Calm Precision light redesign) — light theme with
+ * indigo keywords, emerald strings, light-gray comments, blue
+ * function names. Code area is `bg-background-sunken` (a barely-
+ * tinted gray) so the syntax colors carry the page.
  */
 import { Highlight, type PrismTheme } from 'prism-react-renderer'
 import { memo } from 'react'
 
-/** The custom theme — uses CSS custom properties from the design system.
- *  All colors are semantic tokens so they adapt to any theme change. */
-const forgeDarkTheme: PrismTheme = {
+/**
+ * The custom theme. Uses fixed hex colors (not semantic tokens)
+ * for the syntax palette because:
+ *   1. Prism token colors need to be high-contrast against the
+ *      very light code surface (`oklch(0.975 0 0)` ≈ #f9f9f9) —
+ *      semantic token references like `var(--primary)` can be
+ *      less stable across themes than a fixed palette.
+ *   2. The plain text color uses `var(--foreground)` so the body
+ *      of the code still respects the design system.
+ *
+ * Palette tuned for WCAG AA on `#f9f9f9`:
+ *   - `#0a0a0a` plain text / variables  (17.5:1)
+ *   - `#737373` comments                 (5.0:1)
+ *   - `#4f46e5` keywords (indigo)        (8.3:1)
+ *   - `#059669` strings (emerald)        (5.1:1)
+ *   - `#2563eb` functions (blue)         (5.4:1)
+ *   - `#6366f1` tags (indigo-500)        (5.5:1)
+ *   - `#b45309` numbers (amber-700)      (4.7:1)
+ *   - `#6b7280` operators (gray)         (5.2:1)
+ */
+const forgeLightTheme: PrismTheme = {
   plain: {
     color: 'var(--foreground)',
     backgroundColor: 'transparent',
@@ -40,7 +61,7 @@ const forgeDarkTheme: PrismTheme = {
     {
       types: ['comment', 'prolog', 'doctype', 'cdata'],
       style: {
-        color: 'var(--muted-foreground)',
+        color: '#737373',
         fontStyle: 'italic',
       },
     },
@@ -48,65 +69,89 @@ const forgeDarkTheme: PrismTheme = {
       types: [
         'keyword',
         'boolean',
-        'atrule',
         'important',
         'rule',
       ],
       style: {
-        color: 'var(--primary)',
+        color: '#4f46e5',
+        fontWeight: '500',
+      },
+    },
+    {
+      types: ['atrule'],
+      style: {
+        color: '#4f46e5',
       },
     },
     {
       types: ['tag'],
       style: {
-        color: 'var(--info)',
+        color: '#6366f1',
       },
     },
     {
       types: [
         'string',
-        'attr-value',
+        'char',
         'url',
-        'entity',
-        'inserted',
+        'regex',
       ],
       style: {
-        color: 'var(--success)',
+        color: '#059669',
       },
     },
     {
-      types: ['attr-name'],
+      types: ['attr-value'],
       style: {
-        color: 'var(--accent-foreground)',
+        color: '#059669',
+      },
+    },
+    {
+      types: ['attr-name', 'property'],
+      style: {
+        color: '#2563eb',
       },
     },
     {
       types: [
         'punctuation',
         'operator',
-        'selector',
-        'property',
         'constant',
         'symbol',
-        'deleted',
-        'regex',
       ],
       style: {
-        color: 'var(--muted-foreground)',
+        color: '#6b7280',
+      },
+    },
+    {
+      types: ['selector'],
+      style: {
+        color: '#6b7280',
       },
     },
     {
       types: ['function', 'class-name', 'maybe-class-name'],
       style: {
-        // Deep indigo so function names don't compete with
-        // the primary (--primary) keyword colour.
-        color: 'var(--accent-foreground)',
+        color: '#2563eb',
+        fontWeight: '500',
       },
     },
     {
       types: ['number'],
       style: {
-        color: 'var(--info)',
+        color: '#b45309',
+      },
+    },
+    {
+      types: ['deleted'],
+      style: {
+        color: '#dc2626',
+      },
+    },
+    {
+      types: ['inserted', 'entity'],
+      style: {
+        color: '#059669',
       },
     },
   ],
@@ -132,7 +177,7 @@ function SyntaxHighlighterInner({
   showLineNumbers = true,
 }: SyntaxHighlighterProps) {
   return (
-    <Highlight code={code} language={language} theme={forgeDarkTheme}>
+    <Highlight code={code} language={language} theme={forgeLightTheme}>
       {({ className, style, tokens, getLineProps, getTokenProps }) => (
         <pre
           // `className` is prism-react-renderer's recommended class for

@@ -15,9 +15,10 @@
  *   8. <CallToAction>      — final "Ready to build something?" prompt.
  *   9. <Footer>            — 3-column links + copyright.
  *
- * Design direction follows `docs/UI_DARK_THEME_SPEC.md`:
- * "Refined Dark" — warm charcoal, refined blue accent, Instrument
- * Serif for display + Geist for body, elevation via borders.
+ * Design direction follows the v0 / Lovable / Linear-inspired
+ * "Calm Precision" light theme: near-white surfaces, indigo accent,
+ * Geist Sans for both display and body (no serif anywhere), elevation
+ * via subtle borders + light shadows.
  *
  * Motion language:
  *  - GSAP ScrollTrigger powers the hero entrance, the marquee
@@ -1049,8 +1050,8 @@ function ExampleCard({ example }: { example: Example }): ReactNode {
 
 /**
  * Single large quote. Centered, with attribution. The text
- * uses Instrument Serif (via the `font-display` mapping) to
- * echo the hero headline and reinforce the editorial voice.
+ * uses Geist Sans (via the `font-display` mapping) to
+ * echo the hero headline and keep the typography all-sans.
  */
 function Testimonial(): ReactNode {
   return (

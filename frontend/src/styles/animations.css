@@ -1,83 +1,17 @@
 /* ---------------------------------------------------------------------------
  * Forge — animations.css
  *
- * Shared CSS keyframes consumed by the Tailwind `--animate-*` design
- * tokens (see index.css) and by framer-motion variants in
- * src/lib/motion.ts.
+ * Reduced-motion overrides for all Forge animations.
  *
- * Design intent ("Refined Dark"):
- *   - Only animate `transform` and `opacity` (GPU-composited, cheap)
- *   - Respect `prefers-reduced-motion: reduce` — every animation is
- *     collapsed to its end state
- *   - No infinite animations on layout (only on the shimmer/pulse
- *     affordances where they are meaningful)
- *   - Subtle, purposeful motion — never decorative-only
- *   - Glow animations use box-shadow for the dark-theme signature
- *     blue glow on primary actions
+ * The @keyframes themselves (shimmer, blink-cursor, slide-in, fade-in,
+ * slide-up, pulse-subtle, glow-pulse, gradient-shift) now live inside
+ * the `@theme inline { ... }` block in index.css — the single source
+ * of truth for animation tokens.
+ *
+ * This file's sole contribution is the `prefers-reduced-motion: reduce`
+ * override that collapses every animation to its end state for
+ * users who prefer minimal motion.
  * --------------------------------------------------------------------------- */
-
-/* ─── shimmer ───────────────────────────────────────────────────────
-   Used by skeleton loaders. Background gradient slides left → right. */
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-
-/* ─── blink-cursor ──────────────────────────────────────────────────
-   Used by the code-panel empty state and the streaming code caret.
-   Hard step, no easing. */
-@keyframes blink-cursor {
-  0%, 49% { opacity: 1; }
-  50%, 100% { opacity: 0; }
-}
-
-/* ─── slide-in ──────────────────────────────────────────────────────
-   Used by toasts and panel headers entering from off-screen.
-   Transform + opacity only. */
-@keyframes slide-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* ─── fade-in ───────────────────────────────────────────────────────
-   Generic opacity reveal. Used by overlay backdrops and modals. */
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-/* ─── slide-up ──────────────────────────────────────────────────────
-   Slightly larger enter distance than slide-in. Used by chat
-   messages and content blocks. */
-@keyframes slide-up {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* ─── pulse-subtle ──────────────────────────────────────────────────
-   Gentle opacity pulse for "thinking" / streaming indicators.
-   Matches the calm dark aesthetic. */
-@keyframes pulse-subtle {
-  0%, 100% { opacity: 0.6; }
-  50% { opacity: 1; }
-}
-
-/* ─── glow-pulse ────────────────────────────────────────────────────
-   Soft blue glow pulse for primary action buttons on dark.
-   Uses box-shadow with the refined blue primary color.
-   Signature "Refined Dark" touch — the forge glows. */
-@keyframes glow-pulse {
-  0%, 100% { box-shadow: 0 0 15px oklch(0.65 0.155 250 / 0.1); }
-  50% { box-shadow: 0 0 30px oklch(0.65 0.155 250 / 0.2); }
-}
-
-/* ─── gradient-shift ────────────────────────────────────────────────
-   Slow background-position shift for animated gradient backgrounds.
-   Used on the landing page hero for a subtle living background. */
-@keyframes gradient-shift {
-  0%, 100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-}
 
 /* ─── Reduced-motion overrides ──────────────────────────────────────
    Disable all decorative animations; show their end state. Functional

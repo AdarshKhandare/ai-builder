@@ -1,0 +1,7 @@
+# Force LF line endings for files that run in Linux containers.
+# Prevents CRLF corruption when contributors use Windows with
+# core.autocrlf=true. A CRLF in docker-entrypoint.sh would break
+# the container with "$'\r': command not found".
+*.sh text eol=lf
+Dockerfile text eol=lf
+docker-compose*.yml text eol=lf

@@ -1,43 +1,18 @@
 /* ---------------------------------------------------------------------------
  * Forge — fonts.css
  *
- * "Refined Dark" typography:
- *   --font-display  → Instrument Serif   (editorial headlines, elegant on dark)
- *   --font-body     → Geist              (clean UI text, Vercel-grade)
- *   --font-mono     → Geist Mono         (code, stats)
- *
- * These fonts work beautifully on dark backgrounds:
- *   - Instrument Serif's thin strokes gain elegance against charcoal
- *   - Geist is optimised for screen rendering at all sizes
- *   - Geist Mono provides excellent code legibility
- *
+ * Typography: Geist Sans (all UI text) + Geist Mono (code/stats).
+ * All-sans, clean, modern. Inspired by v0.dev. No serif.
  * Google Fonts <link> tags are in index.html with display=swap.
- * Variable-font ranges let the browser interpolate any weight
- * smoothly without FOUT on weight swaps.
  *
- * Tailwind utility mappings:
+ * Tailwind utility mappings (bridged in `index.css` `@theme inline`):
  *   font-display  → class="font-display"   (h1..h6 via @layer base)
  *   font-body     → class="font-body"      (body text via @layer base)
  *   font-mono     → class="font-mono"      (<code>, <pre>, .font-mono)
  * --------------------------------------------------------------------------- */
 
 :root {
-  /* Variable font ranges. These let the browser interpolate any
-     weight in the range without re-downloading a separate file. */
-  --font-display: 'Instrument Serif', 'Georgia', 'Times New Roman', serif;
-  --font-body: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', 'Fira Code',
-    Consolas, monospace;
-}
-
-/* Variable-font weight ranges. Kept here (not in @theme inline) so
-   they are usable from any CSS file or inline style without going
-   through Tailwind. The numeric ranges match the Google Fonts URL
-   in index.html. */
-@supports (font-variation-settings: normal) {
-  :root {
-    --font-display-weights: 300 700;
-    --font-body-weights: 100 900;
-    --font-mono-weights: 100 900;
-  }
+  --font-display: 'Geist', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-body: 'Geist', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 }

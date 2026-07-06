@@ -2,21 +2,21 @@
  * Forge — index.css
  *
  * The single source of truth for the Forge design system.
- * "Refined Dark" — premium, calm, technical dark aesthetic.
- * Inspired by Cursor, Linear, Raycast, Arc browser dark modes.
+ * Light, clean, modern — v0/Lovable/Linear inspired. Indigo accent.
+ * Geist Sans (UI) + Geist Mono (code). No serif.
  *
  * Design direction (July 2026):
- *   - Dark-first (dark is the ONLY mode; light may be added later)
- *   - Warm charcoal base (NOT pure black — too harsh)
- *   - Refined blue accent (NOT indigo, NOT amber, NOT purple)
- *   - Elevation via lighter borders, NOT drop shadows
- *   - Soft blue glow on primary actions
+ *   - Light-first (light is the default; no dark mode toggle)
+ *   - Near-white surfaces (NOT pure white — too clinical)
+ *   - Indigo primary accent (confident, modern, WCAG AA on white)
+ *   - Elevation via subtle drop shadows + light borders
+ *   - Soft indigo glow on primary actions
  *
  * Layer order (top to bottom):
  *   1. Tailwind + animate.css plugins
  *   2. Global styles (fonts, scrollbar, animations)
  *   3. @theme inline — bridges :root tokens → Tailwind utilities
- *   4. :root  — dark-mode token values (default & only mode)
+ *   4. :root  — light-mode token values (default & only mode)
  *   5. @layer base     — element resets
  *   6. @layer components — small utility classes
  *   7. @layer utilities — opinionated one-off utilities
@@ -32,9 +32,12 @@
 /* ---------------------------------------------------------------------------
  * Dark variant
  *
- * Dark-first design system. The default (:root) is dark.
- * The @custom-variant enables shadcn-style `dark:` utilities
- * for compatibility with shadcn component internals.
+ * Light-first design system. The default (:root) is light and
+ * there is no .dark class anywhere in the app. The
+ * `@custom-variant` is kept here so any shadcn primitive (e.g.
+ * `button.tsx`, `select.tsx`, `input.tsx`) that carries `dark:`
+ * utilities continues to compile cleanly — those utilities are
+ * simply dead code that never matches.
  * --------------------------------------------------------------------------- */
 
 @custom-variant dark (&:is(.dark *));
@@ -106,16 +109,16 @@
   --font-body: var(--font-body);
   --font-mono: var(--font-mono);
 
-  /* ─── Custom shadows (dark-optimised: very subtle, borders do the work) ─── */
-  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.2);
-  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.25), 0 1px 2px -1px rgb(0 0 0 / 0.25);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.35), 0 4px 6px -4px rgb(0 0 0 / 0.35);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.4), 0 8px 10px -6px rgb(0 0 0 / 0.4);
+  /* ─── Custom shadows (light-optimised: subtle, well-distributed) ─── */
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.15), 0 8px 10px -6px rgb(0 0 0 / 0.15);
 
-  /* ─── Glow shadows (primary accent glow for buttons) ─── */
-  --shadow-glow: 0 0 20px oklch(0.65 0.155 250 / 0.12);
-  --shadow-glow-lg: 0 0 40px oklch(0.65 0.155 250 / 0.2);
+  /* ─── Glow shadows (indigo primary accent glow for buttons) ─── */
+  --shadow-glow: 0 0 20px oklch(0.488 0.207 264.377 / 0.15);
+  --shadow-glow-lg: 0 0 40px oklch(0.488 0.207 264.377 / 0.2);
 
   /* ─── Custom animations ─── */
   --animate-shimmer: shimmer 2s ease-in-out infinite;
@@ -152,8 +155,8 @@
     50% { opacity: 1; }
   }
   @keyframes glow-pulse {
-    0%, 100% { box-shadow: 0 0 15px oklch(0.65 0.155 250 / 0.1); }
-    50% { box-shadow: 0 0 30px oklch(0.65 0.155 250 / 0.2); }
+    0%, 100% { box-shadow: 0 0 15px oklch(0.488 0.207 264.377 / 0.1); }
+    50% { box-shadow: 0 0 30px oklch(0.488 0.207 264.377 / 0.2); }
   }
   @keyframes gradient-shift {
     0%, 100% { background-position: 0% 50%; }
@@ -162,80 +165,79 @@
 }
 
 /* ---------------------------------------------------------------------------
- * :root — dark mode (default & only mode)
+ * :root — light mode (default & only mode)
  *
- * "Refined Dark" — warm charcoal base, soft white text,
- * refined blue accent. All values in oklch for perceptual uniformity.
+ * "Calm Precision" — near-white surfaces, dark text,
+ * indigo accent. All values in oklch for perceptual uniformity.
  *
- * Elevation hierarchy (dark theme uses lighter borders, not shadows):
- *   background (0.14) → card (0.18) → popover (0.21)
- *   Each step is ~0.03-0.04 oklch lightness apart.
+ * Elevation hierarchy (light theme uses shadows + light borders):
+ *   background (0.995) → card (0.99) → popover (1)
+ *   Each step is barely 0.005 oklch lightness apart; elevation
+ *   comes from the soft drop shadows defined in `@theme inline`.
  * --------------------------------------------------------------------------- */
 
 :root {
   --radius: 0.5rem;
 
-  /* Core surfaces — warm charcoal, NOT pure black */
-  --background: oklch(0.14 0.006 250);
-  --foreground: oklch(0.93 0.006 250);
-  --card: oklch(0.18 0.008 250);
-  --card-foreground: oklch(0.93 0.006 250);
-  --popover: oklch(0.21 0.01 250);
-  --popover-foreground: oklch(0.93 0.006 250);
+  /* Core surfaces — light, near-white */
+  --background: oklch(0.995 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(0.99 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
 
-  /* Primary — refined blue. Calm, confident, technical.
-   * Not indigo (too purple), not cyan (too cold), not amber (rejected).
-   * oklch(0.65 0.155 250) ≈ #4d8ed6 — WCAG ~5.1:1 on --background. */
-  --primary: oklch(0.65 0.155 250);
-  --primary-foreground: oklch(0.98 0 0);
+  /* Primary — indigo. Confident, modern, WCAG AA on white. */
+  --primary: oklch(0.488 0.207 264.377);
+  --primary-foreground: oklch(0.985 0 0);
 
-  /* Secondary — slightly elevated surface for chips, badges */
-  --secondary: oklch(0.22 0.012 250);
-  --secondary-foreground: oklch(0.85 0.008 250);
+  /* Secondary — light gray surface for chips, badges */
+  --secondary: oklch(0.96 0 0);
+  --secondary-foreground: oklch(0.218 0 0);
 
   /* Muted — subtle backgrounds and secondary text */
-  --muted: oklch(0.22 0.01 250);
-  --muted-foreground: oklch(0.58 0.015 250);
+  --muted: oklch(0.965 0 0);
+  --muted-foreground: oklch(0.45 0 0);
 
-  /* Accent — hover/active states, slightly tinted blue surface */
-  --accent: oklch(0.25 0.02 250);
-  --accent-foreground: oklch(0.90 0.015 250);
+  /* Accent — very light indigo tint for hover/active surfaces */
+  --accent: oklch(0.94 0.02 264);
+  --accent-foreground: oklch(0.218 0 0);
 
-  /* Destructive — red, slightly brightened for dark bg */
-  --destructive: oklch(0.62 0.22 25);
-  --destructive-foreground: oklch(0.98 0 0);
+  /* Destructive — red */
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
 
-  /* Borders — visible but not heavy. The primary elevation tool on dark. */
-  --border: oklch(0.28 0.014 250);
-  --input: oklch(0.25 0.012 250);
-  --ring: oklch(0.65 0.155 250 / 0.4);
+  /* Borders — light gray */
+  --border: oklch(0.91 0 0);
+  --input: oklch(0.91 0 0);
+  --ring: oklch(0.488 0.207 264.377);
 
   /* Extended — Forge-specific */
-  --success: oklch(0.65 0.17 155);
-  --warning: oklch(0.78 0.16 84);
-  --info: oklch(0.65 0.15 250);
-  --background-sunken: oklch(0.11 0.006 250);
-  --border-subtle: oklch(0.21 0.01 250);
-  --primary-glow: oklch(0.65 0.155 250 / 0.15);
+  --success: oklch(0.627 0.194 149.214);
+  --warning: oklch(0.795 0.184 86.047);
+  --info: oklch(0.623 0.214 259.822);
+  --background-sunken: oklch(0.975 0 0);
+  --border-subtle: oklch(0.935 0 0);
+  --primary-glow: oklch(0.488 0.207 264.377 / 0.1);
 
-  /* Chart palette — tuned for dark backgrounds */
-  --chart-1: oklch(0.65 0.155 250); /* refined blue */
-  --chart-2: oklch(0.65 0.17 155); /* green */
-  --chart-3: oklch(0.65 0.15 250); /* blue */
-  --chart-4: oklch(0.62 0.22 25); /* red */
-  --chart-5: oklch(0.65 0.15 310); /* purple */
+  /* Chart palette */
+  --chart-1: oklch(0.488 0.207 264.377);
+  --chart-2: oklch(0.627 0.194 149.214);
+  --chart-3: oklch(0.623 0.214 259.822);
+  --chart-4: oklch(0.577 0.245 27.325);
+  --chart-5: oklch(0.6 0.2 310);
 
   /* Sidebar */
-  --sidebar: oklch(0.16 0.008 250);
-  --sidebar-foreground: oklch(0.93 0.006 250);
-  --sidebar-primary: oklch(0.65 0.155 250);
-  --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.22 0.012 250);
-  --sidebar-accent-foreground: oklch(0.85 0.008 250);
-  --sidebar-border: oklch(0.28 0.014 250);
-  --sidebar-ring: oklch(0.65 0.155 250 / 0.4);
+  --sidebar: oklch(0.99 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.488 0.207 264.377);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.94 0.02 264);
+  --sidebar-accent-foreground: oklch(0.218 0 0);
+  --sidebar-border: oklch(0.91 0 0);
+  --sidebar-ring: oklch(0.488 0.207 264.377);
 
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 /* ---------------------------------------------------------------------------
@@ -294,9 +296,9 @@
     border-radius: calc(var(--radius) * 0.5);
   }
 
-  /* Selection color — refined blue accent. */
+  /* Selection color — indigo primary accent. */
   ::selection {
-    background-color: color-mix(in oklch, var(--primary) 25%, transparent);
+    background-color: color-mix(in oklch, var(--primary) 20%, transparent);
     color: var(--foreground);
   }
 }
@@ -355,8 +357,9 @@
     box-shadow: var(--shadow-glow-lg);
   }
 
-  /* Subtle radial vignette for dark backgrounds.
-   * Adds depth without being visible as a "gradient." */
+  /* Subtle radial vignette for light surfaces.
+   * Adds a hint of warmth at the top without being visible as a
+   * "gradient." Uses the indigo primary at 4% so it adapts. */
   .surface-vignette {
     background:
       radial-gradient(ellipse 80% 50% at 50% 0%, color-mix(in oklch, var(--primary) 4%, transparent), transparent 60%),
@@ -405,7 +408,7 @@
 
 [data-group] > [data-separator][data-separator='active'] {
   background-color: var(--primary);
-  box-shadow: 0 0 8px oklch(0.65 0.155 250 / 0.3);
+  box-shadow: 0 0 8px oklch(0.488 0.207 264.377 / 0.3);
 }
 
 [data-group] > [data-separator][data-separator='focus'] {

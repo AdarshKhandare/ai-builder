@@ -147,11 +147,20 @@ function TwoColumnLayout({
   previewPanel,
 }: TwoColumnLayoutProps) {
   const rightPanelRef = useRef<PanelImperativeHandle | null>(null)
-  // Track the previously-rendered `showCode` value so we only call
-  // collapse/expand when the value actually changes (effect deps
-  // are stable but the imperative API would no-op if we called it
-  // on every render anyway).
-  const lastShowCodeRef = useRef<boolean>(showCode)
+  /*
+   * Track the previously-applied `showCode` value so we only call
+   * collapse/expand when the value actually changes. The ref is
+   * initialised to `null` (NOT to the current `showCode`) so the
+   * first effect run always applies the state — otherwise, when
+   * the page mounts with `showCode=false`, the guard
+   * `null === false` is false, the ref updates to `false`, and
+   * `collapse()` fires. Without the sentinel, `lastShowCodeRef`
+   * would be initialised to `false`, the guard `false === false`
+   * would early-return, and the right Panel would stay at its
+   * `defaultSize=65` with no content (AnimatePresence renders
+   * nothing) — leaving the chat squeezed to 35% of the shell.
+   */
+  const lastShowCodeRef = useRef<boolean | null>(null)
 
   useEffect(() => {
     if (!rightPanelRef.current) return
@@ -273,9 +282,14 @@ function MobileLayout({
 }: MobileLayoutProps) {
   return (
     <div className="flex h-full w-full flex-col">
-      {/* Bottom padding so the last row of content isn't hidden
-          behind the fixed tab bar (48px + safe-area). */}
-      <div className="min-h-0 flex-1 overflow-hidden pb-[calc(48px+env(safe-area-inset-bottom))]">
+      {/*
+       * Bottom padding so the last row of content isn't hidden
+       * behind the fixed tab bar. The tab bar is `fixed bottom-7`
+       * (48px tall) and the StatusBar is `h-7` (28px) in the
+       * Builder's flex flow, so the content area needs to clear
+       * both: 48px (tab bar) + 28px (status bar) + safe-area.
+       */}
+      <div className="min-h-0 flex-1 overflow-hidden pb-[calc(48px+28px+env(safe-area-inset-bottom))]">
         {/*
          * Only render the panel that the user has selected. The tab
          * bar is responsible for switching — we just route.

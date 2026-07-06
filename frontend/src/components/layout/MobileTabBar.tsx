@@ -8,8 +8,14 @@
  * (no point showing it before code is ready).
  *
  * 48px minimum touch targets, `env(safe-area-inset-bottom)` padding
- * for the iOS home indicator. The container is `fixed` so it stays
- * glued to the viewport bottom even when the page itself scrolls.
+ * for the iOS home indicator. The container is `fixed` and pinned
+ * `bottom-7` (NOT `bottom-0`) so it sits ABOVE the 28px `StatusBar`
+ * (rendered in the Builder's flex flow at the bottom of the shell) —
+ * previously the tab bar covered the StatusBar, hiding the model /
+ * status / cost info from the user. The content area in
+ * `PanelLayout.MobileLayout` is padded by `48px + 28px + safe-area`
+ * so chat / code / preview scroll areas clear both the tab bar and
+ * the StatusBar.
  *
  * 2026-07-04 (Phase 6 redesign) — "Calm Precision" light theme:
  * white card bg, subtle border-top, indigo active state + underline.
@@ -72,7 +78,7 @@ export function MobileTabBar({ active, onChange, showPreview }: MobileTabBarProp
       role="tablist"
       aria-label="Builder panels"
       className="
-        fixed bottom-0 left-0 right-0 z-50
+        fixed bottom-7 left-0 right-0 z-50
         flex h-[calc(48px+env(safe-area-inset-bottom))]
         items-stretch border-t border-border bg-card
         pb-safe

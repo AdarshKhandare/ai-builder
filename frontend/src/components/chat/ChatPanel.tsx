@@ -36,7 +36,7 @@
  * 2026-07-04 (Phase 6 redesign) — "Calm Precision" light theme:
  * white bg, user bubbles = light indigo tint (`bg-primary/10`),
  * assistant bubbles = `bg-muted`, rounded-2xl, indigo streaming dot.
- * Empty state: Instrument Serif heading + suggestion chips with
+ * Empty state: Geist Sans display heading + suggestion chips with
  * `--secondary` background.
  */
 import {

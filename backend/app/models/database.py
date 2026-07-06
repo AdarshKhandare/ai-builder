@@ -8,6 +8,9 @@ This module owns:
   :class:`User` (GitHub OAuth identities), and
   :class:`UsageEvent` (per-user daily-quota accounting);
 * :func:`init_db` to create tables on app startup;
+* :func:`_run_lightweight_migrations` to bring pre-existing
+  tables up to date with the current ORM schema (the
+  ``ALTER TABLE ADD COLUMN`` runner described below);
 * :func:`get_db` for use as a FastAPI ``Depends`` in routes.
 
 Design notes
@@ -20,9 +23,20 @@ Design notes
 * **Async-only** — every public function in this module is ``async
   def``. There is no sync escape hatch; routes that touch the DB
   MUST use ``Depends(get_db)`` and ``await`` the session.
-* **No schema migrations yet** — :func:`init_db` uses
-  ``Base.metadata.create_all`` which is idempotent. A real migration
-  story (Alembic) is out of scope for the MVP.
+* **Lightweight ALTER TABLE migrations** — :func:`init_db` calls
+  ``Base.metadata.create_all``, which is idempotent for table
+  creation but does **not** add columns to tables that already
+  exist. When the ORM gains a new column (e.g. ``Project.owner_id``
+  in Phase 8) a deployment that was bootstrapped before that
+  change would carry a stale ``projects`` table and every query
+  against ``owner_id`` would raise
+  ``sqlite3.OperationalError: no such column``. The function
+  :func:`_run_lightweight_migrations` is the pragmatic stand-in
+  for Alembic: a list of ``ALTER TABLE ... ADD COLUMN``
+  statements, applied only when ``PRAGMA table_info`` reports the
+  column as missing. Adding a new column to a future release is a
+  matter of appending an entry to ``_PENDING_MIGRATIONS``; see
+  that function's docstring for the contract.
 * **``expire_on_commit=False``** — without this, accessing attributes
   on a freshly-committed ORM instance triggers a lazy reload, which
   is not allowed outside the session context. Pydantic v2's
@@ -40,12 +54,24 @@ Design notes
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncGenerator
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    func,
+    text,
+)
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import (
+    AsyncConnection,
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
@@ -57,6 +83,8 @@ from app.config import settings
 
 if TYPE_CHECKING:
     pass
+
+logger = logging.getLogger(__name__)
 
 
 class Base(DeclarativeBase):
@@ -268,6 +296,193 @@ async_session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
 )
 
 
+class _ColumnMigration(TypedDict):
+    """Schema for one entry in :data:`_PENDING_MIGRATIONS`.
+
+    Attributes:
+        table: Target table name (must already exist for the
+            migration to apply; a missing table is a no-op).
+        column: Column name to add.
+        column_type: SQL type token (e.g. ``"INTEGER"``,
+            ``"VARCHAR(100)"``). Passed through verbatim into the
+            ``ALTER TABLE ADD COLUMN`` statement.
+        extra: Trailing clause appended after ``column_type``.
+            Typically the foreign-key reference (e.g.
+            ``"REFERENCES users(id) ON DELETE CASCADE"``); empty
+            string for columns with no extra constraint. The
+            runner strips trailing whitespace before assembling
+            the statement.
+    """
+
+    table: str
+    column: str
+    column_type: str
+    extra: str
+
+
+# Lightweight, idempotent ALTER TABLE migrations applied on every
+# startup by :func:`_run_lightweight_migrations`. The list is
+# processed in order; each entry is a single ``ALTER TABLE ...
+# ADD COLUMN`` applied only when ``PRAGMA table_info`` shows the
+# column is missing.
+#
+# History
+# -------
+# * 2026-07-04 — ``projects.owner_id`` added (Phase 8, auth).
+#   Deployments bootstrapped before that date carry a ``projects``
+#   table without the column, so every ``GET /api/projects``
+#   raised ``sqlite3.OperationalError: no such column:
+#   projects.owner_id`` after login. The migration below brings
+#   those deployments up to date on next startup.
+#
+# To add a new column: append a new entry. Do not reorder or
+# rewrite existing entries — older deployments need them.
+_PENDING_MIGRATIONS: list[_ColumnMigration] = [
+    {
+        "table": "projects",
+        "column": "owner_id",
+        "column_type": "INTEGER",
+        "extra": "REFERENCES users(id) ON DELETE CASCADE",
+    },
+]
+
+
+async def _run_lightweight_migrations(connection: AsyncConnection) -> int:
+    """Bring existing tables up to date with the current ORM schema.
+
+    Why this exists
+    ---------------
+    :func:`init_db` calls :func:`sqlalchemy.schema.MetaData.create_all`,
+    which creates tables that are missing but does **not** alter
+    tables that already exist. When the ORM gains a new column
+    (e.g. ``Project.owner_id`` in Phase 8), the column is added to
+    the Python model, ``create_all`` is a no-op against the
+    pre-existing ``projects`` table in the persistent DB file, and
+    every query that references the new column raises
+    ``sqlite3.OperationalError: no such column``.
+
+    This function bridges that gap with a deliberately small tool:
+    a list of ``ALTER TABLE ... ADD COLUMN`` statements, applied
+    only when ``PRAGMA table_info`` reports the column is missing.
+    It is safe to call on every startup (idempotent — re-running
+    the same migration is a no-op), it does not touch existing
+    data, and it runs inside the same ``engine.begin()`` context
+    as :func:`init_db`'s ``create_all`` so the DDL is committed
+    atomically with the table create.
+
+    What it does NOT do
+    -------------------
+    * Drop or rename columns.
+    * Change column types or nullability.
+    * Add indexes (SQLite's ``ALTER TABLE`` cannot create an
+      index inline, and a separate ``CREATE INDEX`` step is out
+      of scope for the MVP).
+    * Migrate data (backfill, type coercion, etc.).
+
+    When any of the above becomes necessary, replace this with a
+    real migration tool (Alembic is the obvious choice) and stop
+    adding entries to :data:`_PENDING_MIGRATIONS`.
+
+    Args:
+        connection: An open async :class:`AsyncConnection` bound
+            to the engine whose schema we want to migrate. Must
+            be inside an ``engine.begin()`` context — the caller
+            in :func:`init_db` provides this so the migration
+            shares a transaction with ``create_all``.
+
+    Returns:
+        The number of migrations that were actually applied.
+        Useful for tests and for the structured log line on
+        startup; the production caller does not act on the
+        return value.
+    """
+    applied = 0
+    for migration in _PENDING_MIGRATIONS:
+        table = migration["table"]
+        column = migration["column"]
+        column_type = migration["column_type"]
+        extra = migration.get("extra", "").strip()
+
+        # ``PRAGMA`` is a sync SQL statement; ``sqlalchemy.text()``
+        # is the standard wrapper for raw SQL on an async
+        # connection. The table name is interpolated into the
+        # statement deliberately — every entry in
+        # ``_PENDING_MIGRATIONS`` is a hard-coded constant, never
+        # user input — so the f-string is safe.
+        try:
+            pragma_result = await connection.execute(
+                text(f"PRAGMA table_info({table})")
+            )
+            existing_columns = {row[1] for row in pragma_result.fetchall()}
+        except SQLAlchemyError as exc:
+            logger.warning(
+                "Lightweight migration: PRAGMA table_info(%s) failed: %s",
+                table,
+                exc,
+            )
+            continue
+
+        if not existing_columns:
+            # The table does not exist. ``create_all`` in
+            # :func:`init_db` will have provisioned it (or will
+            # provision it on the next call) with the column
+            # already in the schema, so there is nothing for us
+            # to migrate. Skip silently and move on.
+            logger.debug(
+                "Lightweight migration: table %s does not exist; "
+                "create_all will provision it with %s",
+                table,
+                column,
+            )
+            continue
+
+        if column in existing_columns:
+            logger.debug(
+                "Lightweight migration: %s.%s already present, skipping",
+                table,
+                column,
+            )
+            continue
+
+        # Build the ``ALTER TABLE ADD COLUMN`` statement.
+        # ``column_type`` is the SQL type (e.g. ``"INTEGER"``);
+        # ``extra`` is the trailing clause (e.g.
+        # ``"REFERENCES users(id) ON DELETE CASCADE"``) and is
+        # empty for columns that need no extra constraint. The
+        # new column inherits SQLite's default nullability, which
+        # matches the ORM (``Project.owner_id`` is
+        # ``nullable=True``).
+        alter_sql = f"ALTER TABLE {table} ADD COLUMN {column} {column_type}"
+        if extra:
+            alter_sql = f"{alter_sql} {extra}"
+
+        # Savepoint-per-migration: a failed ``ALTER`` rolls back
+        # only the savepoint, not the outer transaction. This
+        # keeps the rest of the migrations and the ``create_all``
+        # call in :func:`init_db` alive even if one column add
+        # misbehaves (e.g. the DB file is corrupt, the table is
+        # locked by another process, etc.).
+        try:
+            async with connection.begin_nested():
+                await connection.execute(text(alter_sql))
+            applied += 1
+            logger.info(
+                "Applied migration: added column %s to %s",
+                column,
+                table,
+            )
+        except SQLAlchemyError as exc:
+            logger.warning(
+                "Lightweight migration: failed to add %s.%s (%s): %s",
+                table,
+                column,
+                alter_sql,
+                exc,
+            )
+
+    return applied
+
+
 async def init_db() -> None:
     """Create all tables defined on :class:`Base`.
 
@@ -275,6 +490,20 @@ async def init_db() -> None:
     are :class:`Project`, :class:`User`, and :class:`UsageEvent`;
     adding a new model is a matter of importing it (so the mapper
     is registered with ``Base.metadata``) before this function runs.
+
+    With multiple Uvicorn workers, each worker calls this function on
+    startup. The ``create_all`` call is wrapped in a try/except that
+    swallows the benign "table already exists" race (the losing worker's
+    tables were already created by the winning worker). The migration
+    step is independently idempotent.
+
+    In addition to ``create_all``, this function applies any pending
+    ``ALTER TABLE ADD COLUMN`` statements from
+    :func:`_run_lightweight_migrations`. ``create_all`` creates
+    tables that are missing but does not add columns to tables that
+    already exist; the migration step is what makes the on-disk
+    schema converge with the ORM after the ORM gains new columns.
+    See :func:`_run_lightweight_migrations` for the full contract.
 
     The engine must be importable at the time of the call, which
     is guaranteed by the module-level ``engine`` definition above.
@@ -287,7 +516,23 @@ async def init_db() -> None:
             applied (corrupt file, permission denied, etc.).
     """
     async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
+        try:
+            await connection.run_sync(Base.metadata.create_all)
+        except SQLAlchemyError as exc:
+            # With multiple Uvicorn workers, each worker runs init_db()
+            # on startup. If two workers race on create_all, the second
+            # one may see "table already exists" — a benign race that we
+            # swallow here. The tables ARE created (by the winning worker);
+            # the loser's failure is expected. The migration step below
+            # is already idempotent (PRAGMA check + conditional ALTER).
+            if "already exist" in str(exc).lower():
+                logger.warning(
+                    "create_all race detected (likely multi-worker startup): %s",
+                    exc,
+                )
+            else:
+                raise
+        await _run_lightweight_migrations(connection)
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

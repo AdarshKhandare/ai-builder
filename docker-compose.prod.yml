@@ -50,15 +50,20 @@ services:
         max-file: "3"
 
     # ── Uvicorn tuning for production ──────────────────────────────────────
-    # Override the CMD to add workers. For AI workloads, the bottleneck is
-    # I/O (waiting for LLM API responses), not CPU. 2 workers is a good
-    # balance for 2 OCPUs. Increase if you see request queuing.
+    # 1 worker — SQLite does NOT support concurrent writers (the entire
+    # DB file locks on write). Running 2+ workers with SQLite causes
+    # "database is locked" errors under concurrent requests AND a startup
+    # race where both workers call init_db() → create_all simultaneously,
+    # crashing the second worker with "table already exists". For a
+    # portfolio-scale single-user app, 1 worker is correct. If concurrency
+    # ever becomes a bottleneck, migrate to PostgreSQL (which handles
+    # concurrent writers) BEFORE adding more workers.
     command:
       [
         "uvicorn", "app.main:app",
         "--host", "0.0.0.0",
         "--port", "8000",
-        "--workers", "2",
+        "--workers", "1",
         "--limit-concurrency", "100",
         "--timeout-keep-alive", "65"
       ]

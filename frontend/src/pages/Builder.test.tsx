@@ -19,7 +19,6 @@
  * without touching the network; the real iterate / start behaviour
  * is covered by `useSSE.test.ts` + `api.test.ts`.
  */
-import type { ReactNode } from 'react'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -85,17 +84,7 @@ vi.mock('sonner', () => ({
     info: vi.fn(),
     warning: vi.fn(),
   },
-  // The Builder renders `<Toaster />` from `sonner` via the
-  // `@/components/ui/sonner` wrapper. The wrapper is itself a
-  // real component that uses `useTheme` + `next-themes` — stub
-  // the inner Sonner to a no-op so the page mounts without
-  // pulling in a real portal / theme provider.
   Toaster: () => null,
-}))
-
-vi.mock('next-themes', () => ({
-  useTheme: () => ({ theme: 'system', setTheme: vi.fn() }),
-  ThemeProvider: ({ children }: { children: ReactNode }) => children,
 }))
 
 /*

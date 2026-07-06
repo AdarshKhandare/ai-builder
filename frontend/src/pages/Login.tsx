@@ -3,9 +3,9 @@
  *
  * A single, focused sign-in screen for the GitHub OAuth flow.
  *
- *  - Centered card on a dark, full-bleed background.
+ *  - Centered card on a light, full-bleed background.
  *  - Forge wordmark + logo at the top of the card.
- *  - Instrument Serif headline ("Sign in to Forge") + a
+ *  - Geist Sans display headline ("Sign in to Forge") + a
  *    one-line explanation of *why* GitHub.
  *  - A single "Sign in with GitHub" CTA. Clicking it performs
  *    `window.location.href = '/api/auth/login'` — a full-page

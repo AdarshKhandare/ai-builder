@@ -1,22 +1,22 @@
 /* ---------------------------------------------------------------------------
  * Forge — scrollbar.css
  *
- * Clean, thin scrollbars for the "Refined Dark" design system.
- * Dark-mode-appropriate — subtle gray thumb on transparent track,
- * with a primary-blue hover state.
+ * Clean, thin scrollbars for the "Calm Precision" light design
+ * system. Subtle gray thumb on transparent track, with an indigo
+ * primary hover state.
  *
  * Design intent:
  *   - Thin (6px) so it never competes with the content
  *   - Default track: transparent
- *   - Default thumb: subtle gray (visible against charcoal)
- *   - Hover thumb: refined blue primary accent
- *   - Active thumb: slightly deeper blue
+ *   - Default thumb: subtle gray (visible against near-white)
+ *   - Hover thumb: indigo primary accent
+ *   - Active thumb: slightly deeper indigo
  * --------------------------------------------------------------------------- */
 
 /* WebKit + Blink (Chrome, Edge, Safari, Arc, etc.) */
 * {
   scrollbar-width: thin;
-  scrollbar-color: oklch(0.32 0.012 250) transparent;
+  scrollbar-color: oklch(0.85 0 0) transparent;
 }
 
 *::-webkit-scrollbar {
@@ -29,18 +29,18 @@
 }
 
 *::-webkit-scrollbar-thumb {
-  background-color: oklch(0.32 0.012 250); /* visible against charcoal */
+  background-color: oklch(0.85 0 0); /* visible against near-white */
   border-radius: 9999px;
   border: 0;
   transition: background-color 150ms ease-out;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background-color: oklch(0.65 0.155 250); /* --primary, refined blue */
+  background-color: oklch(0.488 0.207 264.377); /* --primary, indigo */
 }
 
 *::-webkit-scrollbar-thumb:active {
-  background-color: oklch(0.60 0.155 250); /* slightly deeper */
+  background-color: oklch(0.42 0.207 264.377); /* slightly deeper indigo */
 }
 
 /* Corner where vertical & horizontal scrollbars meet */
@@ -51,7 +51,7 @@
 /* Firefox */
 html,
 body {
-  scrollbar-color: oklch(0.32 0.012 250) transparent;
+  scrollbar-color: oklch(0.85 0 0) transparent;
   scrollbar-width: thin;
 }
 

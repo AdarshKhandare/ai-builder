@@ -171,7 +171,7 @@ export function PreviewPanel({ html, isStreaming, projectTitle }: PreviewPanelPr
               initial={false}
               animate={{ width: DEVICE_WIDTHS[device] }}
               transition={{ type: 'spring', stiffness: 400, damping: 32 }}
-              className="relative h-full overflow-hidden rounded-md border border-border bg-white shadow-sm"
+              className="relative h-full overflow-hidden rounded-md border border-border bg-card shadow-sm"
               style={{ maxWidth: '100%' }}
             >
               {/*
