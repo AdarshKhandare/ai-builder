@@ -34,6 +34,7 @@ import { ArrowLeft, Hammer, Loader2 } from 'lucide-react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 
 import { useAuth } from '@/hooks/useAuth'
+import { API_BASE_URL } from '@/lib/api'
 
 /**
  * GitHub Octocat mark — inline SVG so the Login screen does not
@@ -73,8 +74,16 @@ function GitHubIcon({ className }: { className?: string }): ReactNode {
  * `window.location.href` directly — using `<a>` would also
  * work, but we want the click to feel native and bypass any
  * same-tab anchor handling.
+ *
+ * The path is prefixed with `API_BASE_URL` so that in production
+ * (where `VITE_API_URL` is set to the backend origin, e.g.
+ * `https://api.ai-builder.adarshweb.in`) the browser navigates
+ * straight to the backend server instead of hitting the Vercel
+ * frontend's own `/api/auth/login` route. In dev the prefix is
+ * an empty string and the relative `/api/auth/login` path is
+ * proxied by Vite to `http://localhost:8000`.
  */
-const AUTH_LOGIN_URL = '/api/auth/login'
+const AUTH_LOGIN_URL = `${API_BASE_URL}/api/auth/login`
 
 /* ------------------------------------------------------------------ */
 /* Subcomponents                                                       */

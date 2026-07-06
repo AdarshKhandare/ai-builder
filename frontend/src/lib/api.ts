@@ -32,8 +32,30 @@
  *   events REPLACE the previous code entirely, not append to it.
  *
  * In dev, Vite proxies `/api/*` to `http://localhost:8000` (see
- * `vite.config.ts`), so we always use relative URLs.
+ * `vite.config.ts`), and the `API_BASE_URL` constant below is the
+ * empty string — so every fetch hits a relative path like
+ * `/api/health` and the proxy takes over. In production, set
+ * `VITE_API_URL` (e.g. on Vercel) to the full backend origin such as
+ * `https://api.ai-builder.adarshweb.in`; the same fetch calls are
+ * then absolute and reach the backend server instead of the Vercel
+ *   frontend, which would otherwise 404 on every `/api/*` path.
  */
+
+/**
+ * Base URL for all backend API calls.
+ *
+ * In development: empty string `""` — relative URLs like `/api/health`
+ * are proxied to `http://localhost:8000` by Vite's `server.proxy` config.
+ *
+ * In production: set via the `VITE_API_URL` environment variable on
+ * Vercel (e.g. `https://api.ai-builder.adarshweb.in`). All fetch calls
+ * and the OAuth login redirect use this prefix so requests reach the
+ * backend server, not the Vercel frontend.
+ *
+ * The `?? ""` fallback ensures the dev experience is zero-config —
+ * no `.env` file needed locally.
+ */
+export const API_BASE_URL: string = import.meta.env.VITE_API_URL ?? ""
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -153,7 +175,7 @@ export interface IterateRequest {
  * `useModels` hook).
  */
 export async function health(): Promise<HealthResponse> {
-  const res = await fetch('/api/health', {
+  const res = await fetch(`${API_BASE_URL}/api/health`, {
     credentials: 'include',
     headers: { Accept: 'application/json' },
   })
@@ -180,7 +202,7 @@ export async function health(): Promise<HealthResponse> {
  * has something to show — even in offline / demo mode.
  */
 export async function getModels(): Promise<ModelInfo[]> {
-  const res = await fetch('/api/models', {
+  const res = await fetch(`${API_BASE_URL}/api/models`, {
     credentials: 'include',
     headers: { Accept: 'application/json' },
   })
@@ -214,7 +236,7 @@ export async function* generateStream(
   model?: string,
   signal?: AbortSignal,
 ): AsyncGenerator<SSEEvent, void, void> {
-  const res = await fetch('/api/generate', {
+  const res = await fetch(`${API_BASE_URL}/api/generate`, {
     method: 'POST',
     credentials: 'include',
     headers: {
@@ -301,7 +323,7 @@ export async function* iterateStream(
   model?: string,
   signal?: AbortSignal,
 ): AsyncGenerator<SSEEvent, void, void> {
-  const res = await fetch('/api/iterate', {
+  const res = await fetch(`${API_BASE_URL}/api/iterate`, {
     method: 'POST',
     credentials: 'include',
     headers: {
@@ -465,7 +487,7 @@ export async function listProjects(
     limit: String(limit),
     offset: String(offset),
   })
-  const res = await fetch(`/api/projects?${params.toString()}`, {
+  const res = await fetch(`${API_BASE_URL}/api/projects?${params.toString()}`, {
     credentials: 'include',
     headers: { Accept: 'application/json' },
   })
@@ -479,7 +501,7 @@ export async function listProjects(
  *         404s for missing ids.
  */
 export async function getProject(id: number): Promise<ProjectFull> {
-  const res = await fetch(`/api/projects/${id}`, {
+  const res = await fetch(`${API_BASE_URL}/api/projects/${id}`, {
     credentials: 'include',
     headers: { Accept: 'application/json' },
   })
@@ -495,7 +517,7 @@ export async function getProject(id: number): Promise<ProjectFull> {
 export async function createProject(
   data: ProjectCreateBody,
 ): Promise<ProjectFull> {
-  const res = await fetch('/api/projects', {
+  const res = await fetch(`${API_BASE_URL}/api/projects`, {
     method: 'POST',
     credentials: 'include',
     headers: {
@@ -515,7 +537,7 @@ export async function updateProject(
   id: number,
   data: ProjectUpdateBody,
 ): Promise<ProjectFull> {
-  const res = await fetch(`/api/projects/${id}`, {
+  const res = await fetch(`${API_BASE_URL}/api/projects/${id}`, {
     method: 'PATCH',
     credentials: 'include',
     headers: {
@@ -532,7 +554,7 @@ export async function updateProject(
  * we deliberately do NOT call `.json()` because there's no body.
  */
 export async function deleteProject(id: number): Promise<void> {
-  const res = await fetch(`/api/projects/${id}`, {
+  const res = await fetch(`${API_BASE_URL}/api/projects/${id}`, {
     method: 'DELETE',
     credentials: 'include',
     headers: { Accept: 'application/json' },
@@ -574,7 +596,7 @@ export async function deleteProject(id: number): Promise<void> {
  * fall back to "not signed in". Network failures throw as well.
  */
 export async function getMe(): Promise<User | null> {
-  const res = await fetch('/api/auth/me', {
+  const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
     credentials: 'include',
     headers: { Accept: 'application/json' },
   })
@@ -600,7 +622,7 @@ export async function getMe(): Promise<User | null> {
  * failures throw as well.
  */
 export async function logout(): Promise<void> {
-  const res = await fetch('/api/auth/logout', {
+  const res = await fetch(`${API_BASE_URL}/api/auth/logout`, {
     method: 'POST',
     credentials: 'include',
     headers: { Accept: 'application/json' },
