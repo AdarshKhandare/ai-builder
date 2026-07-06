@@ -458,7 +458,10 @@ async def _exchange_code_and_fetch_user(code: str) -> dict[str, Any]:
         # and re-raise as our own typed exception so the route
         # does not depend on the authlib exception hierarchy.
         try:
-            token_response = await oauth.fetch_access_token(
+            # authlib's AsyncOAuth2Client method is ``fetch_token`` (not
+            # ``fetch_access_token``). It POSTs to the token endpoint with
+            # the authorization code and returns the parsed token dict.
+            token_response = await oauth.fetch_token(
                 _GITHUB_TOKEN_URL,
                 code=code,
             )
