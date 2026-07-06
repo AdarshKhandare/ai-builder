@@ -50,6 +50,35 @@ _GITHUB_USER_PAYLOAD: dict[str, Any] = {
     "email": "octocat@github.com",
 }
 
+# Fixed state nonce used by the callback tests below. The value is
+# arbitrary — only the MATCH between the cookie and the query
+# parameter is exercised — so we can pin it to a constant for
+# readable assertions and pass it both places.
+_TEST_OAUTH_STATE = "test-oauth-state-nonce-for-callback"
+
+
+async def _seed_oauth_state_cookie(
+    client: AsyncClient, state: str = _TEST_OAUTH_STATE
+) -> str:
+    """Pre-load the ``forge_oauth_state`` cookie on ``client``.
+
+    Mirrors what the ``/api/auth/login`` route does in production:
+    set the cookie with the path scoped to the callback so the
+    server can read it back. httpx's client-side ``Cookies``
+    jar only takes ``name`` / ``value`` / ``path`` / ``domain``
+    — the ``HttpOnly`` / ``SameSite`` attributes are response
+    attributes enforced by the browser and not relevant to the
+    in-process ASGI test transport (the test client IS the
+    browser). The server's CSRF check only looks at the cookie
+    VALUE, which is what we set here.
+    """
+    client.cookies.set(
+        "forge_oauth_state",
+        state,
+        path="/api/auth/callback",
+    )
+    return state
+
 
 # ---------------------------------------------------------------------------
 # JWT helpers — pure-function unit tests
@@ -280,6 +309,10 @@ async def test_login_redirects_to_github(
           ``https://github.com/login/oauth/authorize``
         * The redirect URL includes the configured ``client_id``
           and the ``read:user`` scope
+        * A ``forge_oauth_state`` cookie is set on the response
+          (the CSRF nonce) with a non-empty value, a 10-minute
+          max-age, ``HttpOnly``, ``SameSite=Lax``, and a path
+          scoped to ``/api/auth/callback``
     """
     monkeypatch.setattr(settings, "GITHUB_CLIENT_ID", "test-client-id-12345")
     monkeypatch.setattr(settings, "GITHUB_CLIENT_SECRET", "test-client-secret")
@@ -299,6 +332,27 @@ async def test_login_redirects_to_github(
         "read%3Auser" in location or "read:user" in location
     ), f"Expected read:user scope in URL, got {location!r}"
 
+    # CSRF defence: the response MUST set a short-lived state
+    # cookie. We pull the nonce out of the Set-Cookie header and
+    # also confirm it is URL-safe (mirrored into the GitHub
+    # authorize URL).
+    set_cookie = response.headers.get("set-cookie", "")
+    assert (
+        "forge_oauth_state=" in set_cookie
+    ), f"Expected forge_oauth_state cookie, got {set_cookie!r}"
+    state_value = set_cookie.split("forge_oauth_state=", 1)[1].split(";", 1)[0]
+    assert state_value, f"Expected non-empty state nonce, got {state_value!r}"
+    # 10-minute max-age (600s) — set on the cookie so a stale
+    # browser cannot replay an old nonce past the TTL.
+    assert (
+        "Max-Age=600" in set_cookie
+    ), f"Expected Max-Age=600 on state cookie, got {set_cookie!r}"
+    # The state nonce must be present in the GitHub URL so GitHub
+    # can echo it back on the callback.
+    assert (
+        f"state={state_value}" in location
+    ), f"Expected state={state_value} in authorize URL, got {location!r}"
+
 
 # ---------------------------------------------------------------------------
 # GET /api/auth/callback — full OAuth round-trip (mocked)
@@ -315,6 +369,7 @@ async def test_callback_creates_user_and_sets_cookie(
         * Status code is ``307``
         * ``Location`` header points at ``<FRONTEND_URL>/builder``
         * ``Set-Cookie`` header includes a non-empty ``forge_token``
+        * The state cookie is cleared on success (single-use nonce)
         * The :class:`User` row is created in the DB with the
           expected ``github_id`` / ``username``
     """
@@ -325,9 +380,13 @@ async def test_callback_creates_user_and_sets_cookie(
     fake_exchange = AsyncMock(return_value=_GITHUB_USER_PAYLOAD)
     monkeypatch.setattr("app.routes.auth._exchange_code_and_fetch_user", fake_exchange)
 
+    # Seed the CSRF state cookie so the callback's state check
+    # passes. The same nonce is sent in the query string.
+    state = await _seed_oauth_state_cookie(client)
+
     response = await client.get(
         "/api/auth/callback",
-        params={"code": "fake-oauth-code", "state": "any"},
+        params={"code": "fake-oauth-code", "state": state},
         follow_redirects=False,
     )
     assert response.status_code == 307, (
@@ -345,6 +404,22 @@ async def test_callback_creates_user_and_sets_cookie(
     # Pull the JWT out of the Set-Cookie header.
     cookie_value = set_cookie.split("forge_token=", 1)[1].split(";", 1)[0]
     assert cookie_value, "Expected a non-empty JWT in the cookie"
+
+    # The state cookie is single-use and must be cleared on a
+    # successful callback. ``httpx`` parses Set-Cookie into the
+    # jar, so after this request the cookie is expired.
+    state_set_cookie = ""
+    for header_value in response.headers.get_list("set-cookie"):
+        if "forge_oauth_state=" in header_value:
+            state_set_cookie = header_value
+            break
+    assert state_set_cookie, (
+        f"Expected Set-Cookie to clear forge_oauth_state, got "
+        f"set-cookie={set_cookie!r}"
+    )
+    assert (
+        "Max-Age=0" in state_set_cookie or "expires=" in state_set_cookie.lower()
+    ), f"Expected state cookie to be expired, got {state_set_cookie!r}"
 
     # The token must verify back to a real user.
     claims = decode_access_token(cookie_value)
@@ -381,10 +456,12 @@ async def test_callback_upserts_existing_user(
     fake_exchange = AsyncMock(return_value=_GITHUB_USER_PAYLOAD)
     monkeypatch.setattr("app.routes.auth._exchange_code_and_fetch_user", fake_exchange)
 
-    # First login — creates the row.
+    # First login — creates the row. Seed a fresh state cookie
+    # for this call so the CSRF check passes.
+    state_1 = await _seed_oauth_state_cookie(client, state="state-nonce-1")
     response = await client.get(
         "/api/auth/callback",
-        params={"code": "code-1", "state": "x"},
+        params={"code": "code-1", "state": state_1},
         follow_redirects=False,
     )
     assert response.status_code == 307
@@ -394,13 +471,16 @@ async def test_callback_upserts_existing_user(
     first_user_id = int(decode_access_token(first_cookie)["sub"])
 
     # Second login — same GitHub id, but a refreshed username.
+    # Seed a NEW state cookie (the previous one was deleted on
+    # the successful first callback).
     updated_payload = dict(_GITHUB_USER_PAYLOAD)
     updated_payload["login"] = "octocat-renamed"
     updated_payload["email"] = "octocat-renamed@github.com"
     fake_exchange.return_value = updated_payload
+    state_2 = await _seed_oauth_state_cookie(client, state="state-nonce-2")
     response = await client.get(
         "/api/auth/callback",
-        params={"code": "code-2", "state": "y"},
+        params={"code": "code-2", "state": state_2},
         follow_redirects=False,
     )
     assert response.status_code == 307
@@ -434,8 +514,12 @@ async def test_callback_without_client_id_returns_503(
     """
     monkeypatch.setattr(settings, "GITHUB_CLIENT_ID", "")
     monkeypatch.setattr(settings, "GITHUB_CLIENT_SECRET", "")
+    # Seed the state cookie so the CSRF check (the FIRST thing
+    # the callback does) passes — only then can the 503 path
+    # be reached.
+    state = await _seed_oauth_state_cookie(client)
     response = await client.get(
-        "/api/auth/callback", params={"code": "x", "state": "y"}
+        "/api/auth/callback", params={"code": "x", "state": state}
     )
     assert response.status_code == 503
 
@@ -459,8 +543,11 @@ async def test_callback_github_exchange_failure_returns_502(
     fake_exchange = AsyncMock(side_effect=_GitHubOAuthError("token exchange failed"))
     monkeypatch.setattr("app.routes.auth._exchange_code_and_fetch_user", fake_exchange)
 
+    # Seed the state cookie so the CSRF check passes and the
+    # route actually reaches the GitHub exchange code.
+    state = await _seed_oauth_state_cookie(client)
     response = await client.get(
-        "/api/auth/callback", params={"code": "bad", "state": "x"}
+        "/api/auth/callback", params={"code": "bad", "state": state}
     )
     assert response.status_code == 502, (
         f"Expected 502 on GitHub OAuth failure, got "
@@ -468,6 +555,125 @@ async def test_callback_github_exchange_failure_returns_502(
     )
     body = response.json()
     assert "detail" in body
+
+
+# ---------------------------------------------------------------------------
+# /api/auth/callback — OAuth state (CSRF) validation
+# ---------------------------------------------------------------------------
+
+
+async def test_callback_rejects_missing_state(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``GET /api/auth/callback`` returns 403 when no state cookie is set.
+
+    This is the login-CSRF defence: a third-party site can embed
+    ``<img src="https://forge.example/api/auth/callback?code=ATTACKER_CODE&state=ANY">``
+    in a page the victim visits. The victim's browser sends the
+    request, but the attacker cannot set the ``forge_oauth_state``
+    cookie on the victim's browser (cross-origin cookies are
+    blocked). The callback must therefore reject the request
+    with 403 before contacting GitHub.
+
+    Asserts:
+        * Status code is ``403`` (not 502 / 500)
+        * The ``_exchange_code_and_fetch_user`` stub is NOT called
+          (CSRF rejection happens BEFORE any GitHub contact)
+    """
+    monkeypatch.setattr(settings, "GITHUB_CLIENT_ID", "test-client-id")
+    monkeypatch.setattr(settings, "GITHUB_CLIENT_SECRET", "test-client-secret")
+
+    fake_exchange = AsyncMock(return_value=_GITHUB_USER_PAYLOAD)
+    monkeypatch.setattr("app.routes.auth._exchange_code_and_fetch_user", fake_exchange)
+
+    # No state cookie is seeded. The query parameter alone is
+    # not enough — the attacker could set the query, but cannot
+    # set the cookie.
+    response = await client.get(
+        "/api/auth/callback",
+        params={"code": "attacker-code", "state": "anything"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 403, (
+        f"Expected 403 for missing state cookie, got "
+        f"{response.status_code}: {response.text}"
+    )
+    body = response.json()
+    assert "Invalid OAuth state" in body.get(
+        "detail", ""
+    ), f"Expected CSRF rejection detail, got body={body!r}"
+    fake_exchange.assert_not_called()
+
+
+async def test_callback_rejects_mismatched_state(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``GET /api/auth/callback`` returns 403 when state cookie != state query.
+
+    A more subtle login-CSRF: the victim IS logged into a
+    different Forge session (so a state cookie exists), but the
+    attacker-controlled query parameter has a different nonce.
+    The route must still reject the request.
+
+    Asserts:
+        * Status code is ``403``
+        * The exchange stub is NOT called
+    """
+    monkeypatch.setattr(settings, "GITHUB_CLIENT_ID", "test-client-id")
+    monkeypatch.setattr(settings, "GITHUB_CLIENT_SECRET", "test-client-secret")
+
+    fake_exchange = AsyncMock(return_value=_GITHUB_USER_PAYLOAD)
+    monkeypatch.setattr("app.routes.auth._exchange_code_and_fetch_user", fake_exchange)
+
+    # Seed a cookie with one nonce; send a DIFFERENT one in the
+    # query — the classic CSRF mismatch.
+    await _seed_oauth_state_cookie(client, state="real-victim-nonce")
+    response = await client.get(
+        "/api/auth/callback",
+        params={"code": "attacker-code", "state": "attacker-nonce"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 403, (
+        f"Expected 403 for state mismatch, got "
+        f"{response.status_code}: {response.text}"
+    )
+    fake_exchange.assert_not_called()
+
+
+async def test_callback_rejects_when_state_cookie_missing_but_query_present(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A non-empty state query with NO matching cookie is a 403.
+
+    This guards against an attacker that manages to craft a
+    state-looking value in the query (e.g. via a phishing link)
+    but cannot set the cookie. The cookie is the source of
+    truth.
+
+    Asserts:
+        * Status code is ``403``
+        * The exchange stub is NOT called
+    """
+    monkeypatch.setattr(settings, "GITHUB_CLIENT_ID", "test-client-id")
+    monkeypatch.setattr(settings, "GITHUB_CLIENT_SECRET", "test-client-secret")
+
+    fake_exchange = AsyncMock(return_value=_GITHUB_USER_PAYLOAD)
+    monkeypatch.setattr("app.routes.auth._exchange_code_and_fetch_user", fake_exchange)
+
+    # Send a state query but DO NOT seed the cookie.
+    response = await client.get(
+        "/api/auth/callback",
+        params={"code": "code", "state": "attacker-supplied"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 403, (
+        f"Expected 403 when state cookie is absent, got "
+        f"{response.status_code}: {response.text}"
+    )
+    fake_exchange.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

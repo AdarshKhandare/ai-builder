@@ -46,9 +46,14 @@ class ProjectCreate(BaseModel):
             prompt that the generator accepted can also be
             persisted.
         code: The generated HTML/CSS/JS body. Required, at least
-            one character. The DB column is ``TEXT`` and accepts
-            the full body produced by the coder (typically tens
-            of KB).
+            one character, capped at 1 000 000 (1 MB). The DB
+            column is ``TEXT`` and accepts the full body produced
+            by the coder (typically tens of KB). The 1 MB cap is
+            a defence against a malicious client sending a
+            multi-gigabyte JSON body and exhausting server RAM
+            during Pydantic validation — see
+            :class:`ProjectUpdate.code` for the matching
+            constraint on PATCH.
         model: OpenCode Go model id that produced ``code``. The
             pattern matches the values exposed by
             :data:`app.routes.health.AVAILABLE_MODELS`.
@@ -66,7 +71,12 @@ class ProjectCreate(BaseModel):
     )
     code: str = Field(
         min_length=1,
-        description="Generated HTML/CSS/JS body.",
+        max_length=1_000_000,
+        description=(
+            "Generated HTML/CSS/JS body. Capped at 1 MB to "
+            "prevent oversized payloads from exhausting server "
+            "memory."
+        ),
     )
     model: str = Field(
         pattern=_MODEL_ID_PATTERN,
@@ -89,8 +99,11 @@ class ProjectUpdate(BaseModel):
     Attributes:
         title: New project name. Capped at 200 chars; mirrors
             :class:`ProjectCreate.title`.
-        code: New generated body. Must be non-empty; mirrors
-            :class:`ProjectCreate.code`.
+        code: New generated body. Must be non-empty and capped at
+            1 MB; mirrors :class:`ProjectCreate.code`. The cap
+            is the same as on create to prevent a PATCH with a
+            multi-gigabyte body from exhausting server RAM during
+            Pydantic validation.
         model: New OpenCode Go model id. Same pattern as
             :class:`ProjectCreate.model`.
     """
@@ -103,7 +116,11 @@ class ProjectUpdate(BaseModel):
     code: str | None = Field(
         default=None,
         min_length=1,
-        description="New generated body.",
+        max_length=1_000_000,
+        description=(
+            "New generated body. Capped at 1 MB to prevent "
+            "oversized payloads from exhausting server memory."
+        ),
     )
     model: str | None = Field(
         default=None,

@@ -9,11 +9,17 @@ This module centralises the FastAPI ``Depends`` callables used to:
   (:func:`check_usage_quota`).
 
 The quota check is a *side-effectful* dependency: it inserts a
-:class:`~app.models.database.UsageEvent` row on success, so a route
-that wants the quota gate MUST commit or flush the dependency's
-session before returning. The dependency hands the same session it
-inserted on to the route so the caller can append its own writes to
-the same transaction.
+:class:`~app.models.database.UsageEvent` row on success and
+**commits immediately** so the count is persisted before the route
+handler starts running. This is critical for the SSE streaming
+endpoints (``/api/generate`` and ``/api/iterate``): their response
+is a long-lived stream (30s-2min) and we cannot afford to wait for
+the route to finish before the quota is recorded — the user must
+NOT be able to issue more requests than the cap within the same
+window just because the previous stream is still in flight. The
+:func:`get_db` dependency's ``async with`` block keeps the session
+open and usable for reads after the commit
+(``expire_on_commit=False`` is set on the sessionmaker).
 
 Why this lives in ``app/routes/`` and not ``app/services/``
 ----------------------------------------------------------------
@@ -27,7 +33,6 @@ imports ``models/``) and ``routes/`` (which imports both).
 from __future__ import annotations
 
 import logging
-import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any
 
@@ -340,17 +345,29 @@ async def check_usage_quota(
     Counts :class:`UsageEvent` rows for ``user`` on ``endpoint``
     with ``created_at >= start_of_today_utc``. If the count is
     already at or above ``daily_limit`` the request is rejected
-    with HTTP 429. Otherwise a new row is inserted and the request
-    continues.
+    with HTTP 429. Otherwise a new row is inserted, **committed
+    in its own transaction**, and the request continues.
 
-    The dependency is side-effectful: it appends a row to
-    ``usage_events`` in the same session the route will use. The
-    session is committed by the route when the overall request
-    completes successfully; if the route fails partway through,
-    the route's exception handler (or FastAPI's default) will roll
-    back the insert along with the rest of the transaction. The
-    test suite relies on this — quota-depleting tests must exercise
-    a happy path so the event actually persists.
+    Why we commit here (not in the route)
+    -------------------------------------
+    The two quota-gated SSE endpoints (``/api/generate`` and
+    ``/api/iterate``) are long-lived streams (30s-2min). If the
+    quota event were committed only when the route returns, a
+    user could open N parallel requests, drain the cap, and the
+    actual count on disk would lag behind for the entire duration
+    of the streams. By committing the event in the dependency
+    we make the count authoritative the moment the request is
+    authorised — the next request that arrives sees an up-to-date
+    count and is correctly rejected.
+
+    The route handlers still receive ``(user, db)`` so they can
+    append additional writes (e.g. a new :class:`Project` row) to
+    the same session. Those writes commit in their own
+    transaction at the end of the route; the quota event has
+    already been persisted by the time they start, so a route
+    failure does NOT roll the quota back. The session is
+    ``expire_on_commit=False`` so attribute access on committed
+    instances works without a refresh.
 
     Args:
         endpoint: Logical endpoint key (must be a key of
@@ -365,7 +382,8 @@ async def check_usage_quota(
 
     Returns:
         The ``(user, db)`` tuple — passed through to the route
-        unchanged so the route can keep using the same session.
+        unchanged so the route can keep using the same session
+        (for reads and for additional writes).
 
     Raises:
         HTTPException: ``429`` with a structured detail payload
@@ -410,21 +428,13 @@ async def check_usage_quota(
             headers={"Retry-After": str(retry_after)},
         )
 
-    # Append the new event. The route will ``commit()`` when (and
-    # only when) it wants the event to persist. If the route
-    # raises, the SQLAlchemy session is rolled back and the row
-    # never reaches disk.
+    # Append AND commit the new event. The commit is essential:
+    # we need the count on disk to be authoritative the moment
+    # the request is authorised, so a parallel request that
+    # arrives a millisecond later sees the updated count and
+    # is correctly rejected. The route may still use ``db`` to
+    # append additional writes; those commit in their own
+    # transaction when the route returns.
     db.add(UsageEvent(user_id=user.id, endpoint=endpoint))
+    await db.commit()
     return user, db
-
-
-def generate_state_nonce() -> str:
-    """Return a fresh, URL-safe random state nonce for OAuth.
-
-    Used by :mod:`app.routes.auth` to generate the ``state``
-    parameter of the GitHub ``/login/oauth/authorize`` redirect.
-    We do not need to validate the state on callback (the OAuth
-    ``code`` is one-shot and tied to the client id) but issuing
-    one is good hygiene and matches the authlib helpers.
-    """
-    return secrets.token_urlsafe(24)

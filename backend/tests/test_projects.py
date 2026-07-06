@@ -519,3 +519,102 @@ async def test_model_validation(auth_client: AsyncClient, test_user: dict) -> No
     assert (
         "detail" in body
     ), f"Expected FastAPI validation error envelope, got body={body!r}"
+
+
+# ---------------------------------------------------------------------------
+# Tests — Payload size limits (DoS defence)
+# ---------------------------------------------------------------------------
+#
+# ``ProjectCreate.code`` and ``ProjectUpdate.code`` are capped at
+# 1 MB by the Pydantic schema. An attacker who can send an
+# unbounded JSON body to the API can otherwise force the server
+# to allocate gigabytes of RAM during validation. The cap is
+# generous (a real single-page app is typically 10-50 KB; 1 MB
+# leaves headroom for unusually large apps) but bounded.
+# ---------------------------------------------------------------------------
+
+
+async def test_create_project_rejects_oversized_code(
+    auth_client: AsyncClient, test_user: dict
+) -> None:
+    """``POST /api/projects`` rejects a ``code`` body > 1 MB with ``422``.
+
+    A request with a 1.5 MB ``code`` field is rejected at the
+    Pydantic layer (status 422) before the route handler runs.
+    This prevents a malicious client from forcing the server to
+    allocate multi-MB strings during validation.
+
+    Asserts:
+        * Status code is ``422`` (FastAPI request validation)
+        * Response body references the ``code`` field
+    """
+    oversized_code = "x" * (1_500_000)  # 1.5 MB, well over the 1 MB cap
+    response = await auth_client.post(
+        "/api/projects", json=_sample_payload(code=oversized_code)
+    )
+    assert response.status_code == 422, (
+        f"Expected 422 for oversized code, got "
+        f"{response.status_code}: {response.text}"
+    )
+    body = response.json()
+    # FastAPI's 422 body lists each invalid field in ``detail``;
+    # the response must mention ``code`` (or, less commonly, the
+    # payload as a whole) so the client can localise the error.
+    assert "detail" in body, f"Expected validation envelope, got {body!r}"
+    detail_str = str(body["detail"])
+    assert (
+        "code" in detail_str.lower()
+    ), f"Expected 'code' in 422 detail, got detail={detail_str!r}"
+
+
+async def test_create_project_accepts_code_at_size_limit(
+    auth_client: AsyncClient, test_user: dict
+) -> None:
+    """A ``code`` body of EXACTLY 1 MB (1 000 000 chars) is accepted.
+
+    The cap is inclusive — Pydantic's ``max_length=1_000_000``
+    allows exactly that many characters. This pins the boundary
+    so a future change to a strict-less-than comparison would
+    be caught.
+
+    Asserts:
+        * Status code is ``201``
+    """
+    code_at_limit = "x" * 1_000_000
+    response = await auth_client.post(
+        "/api/projects", json=_sample_payload(code=code_at_limit)
+    )
+    assert response.status_code == 201, (
+        f"Expected 201 for code at the 1 MB boundary, got "
+        f"{response.status_code}: {response.text}"
+    )
+
+
+async def test_update_project_rejects_oversized_code(
+    auth_client: AsyncClient, test_user: dict
+) -> None:
+    """``PATCH /api/projects/{id}`` rejects a ``code`` body > 1 MB with ``422``.
+
+    Same defence as :func:`test_create_project_rejects_oversized_code`
+    but for the PATCH path. A separate test because the schema
+    is :class:`ProjectUpdate` (different class, same constraint
+    but easy to forget in a future refactor).
+
+    Asserts:
+        * Status code is ``422``
+    """
+    created = await _create_project(auth_client)
+    oversized_code = "x" * (1_500_000)
+    response = await auth_client.patch(
+        f"/api/projects/{created['id']}", json={"code": oversized_code}
+    )
+    assert response.status_code == 422, (
+        f"Expected 422 for oversized PATCH code, got "
+        f"{response.status_code}: {response.text}"
+    )
+    body = response.json()
+    assert "detail" in body, f"Expected validation envelope, got {body!r}"
+    detail_str = str(body["detail"])
+    assert (
+        "code" in detail_str.lower()
+    ), f"Expected 'code' in 422 detail, got detail={detail_str!r}"

@@ -1,8 +1,8 @@
 /// <reference types="vitest/config" />
-import path from 'node:path'
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
+import path from "node:path";
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 
 // https://vite.dev/config/
 //
@@ -26,25 +26,30 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      "@": path.resolve(__dirname, "./src"),
     },
   },
   server: {
     port: 5173,
     strictPort: false,
     proxy: {
-      '/api': {
-        target: 'http://localhost:8000',
+      "/api": {
+        target: "http://localhost:8000",
         changeOrigin: true,
       },
     },
+    allowedHosts: [
+      "localhost",
+      "127.0.0.1",
+      "c5aa-152-56-12-117.ngrok-free.app",
+    ],
   },
   test: {
     globals: true,
-    environment: 'jsdom',
-    setupFiles: './src/test-setup.ts',
+    environment: "jsdom",
+    setupFiles: "./src/test-setup.ts",
     // We don't load the real Tailwind stylesheet in unit tests; components
     // are asserted on by structure / data attributes, not computed styles.
     css: false,
   },
-})
+});
