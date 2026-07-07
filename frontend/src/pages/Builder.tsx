@@ -31,12 +31,13 @@
  * `PanelLayout(ChatPanel | CodePanel | PreviewPanel)` +
  * `HistoryDrawer` + `StatusBar` chrome.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import JSZip from "jszip";
 import { toast } from "sonner";
 
 import { useSSE } from "@/hooks/useSSE";
 import { useModels } from "@/hooks/useModels";
+import { useAuth } from "@/hooks/useAuth";
 import {
   createProject,
   updateProject,
@@ -45,6 +46,7 @@ import {
   type ProjectFull,
 } from "@/lib/api";
 import { estimateCostUsd } from "@/lib/cost";
+import { deriveTitleFromPrompt } from "@/lib/deriveTitle";
 import { TopBar } from "@/components/layout/TopBar";
 import { PanelLayout } from "@/components/layout/PanelLayout";
 import { StatusBar } from "@/components/layout/StatusBar";
@@ -72,12 +74,12 @@ type BuilderMode = "generation" | "iteration";
 
 /**
  * The default model the picker initializes to. Pinned to
- * `opencode-go/minimax-m3` — the recommended coder in the
+ * `opencode-go/deepseek-v4-flash` — the recommended coder in the
  * fallback catalog. If the live catalog doesn't include this id
  * (e.g. a future backend rebrand), the on-mount effect falls
  * back to the first recommended model.
  */
-const DEFAULT_MODEL_ID = "opencode-go/minimax-m3";
+const DEFAULT_MODEL_ID = "opencode-go/deepseek-v4-flash";
 
 /** Slug fallback for the download filename when the project has no
  *  title yet. */
@@ -85,6 +87,21 @@ const DEFAULT_DOWNLOAD_FILENAME = "forge-app.zip";
 
 /** Maximum length of the slug derived from the project title. */
 const MAX_SLUG_LENGTH = 64;
+
+/*
+ * Abuse-prevention cap copy — kept in module scope so the wording
+ * matches the backend's HTTP 429 `detail` strings exactly. The
+ * Builder uses these for the inline "limit reached" message in the
+ * chat panel; the backend returns the same strings on 429 (the
+ * SSE hook surfaces them as `error` for the toast). Keeping the
+ * two in sync prevents the user from seeing two different
+ * messages for the same condition.
+ */
+const PROJECT_LIMIT_MESSAGE = (limit: number): string =>
+  `You've reached the ${limit}-project limit for your account. You can still iterate on your existing projects, but you cannot create new ones.`;
+
+const ITERATION_LIMIT_MESSAGE = (limit: number): string =>
+  `You've reached the ${limit}-iteration limit for this project.`;
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
@@ -215,7 +232,9 @@ export function Builder() {
   const [activeTab, setActiveTab] = useState<"code" | "preview">("code");
   /* Mobile-only tab. Defaults to 'chat' so the first-run screen
      shows the full-width empty state. */
-  const [mobileTab, setMobileTab] = useState<"chat" | "code" | "preview">("chat");
+  const [mobileTab, setMobileTab] = useState<"chat" | "code" | "preview">(
+    "chat",
+  );
 
   /* --- history drawer state --------------------------------------- */
   /*
@@ -228,8 +247,42 @@ export function Builder() {
   const [historyOpen, setHistoryOpen] = useState<boolean>(false);
   const [currentProjectId, setCurrentProjectId] = useState<number | null>(null);
 
+  /*
+   * Tracks the loaded/current project's iteration counters so the
+   * chat input can be disabled when the project hits its cap.
+   * The backend is the source of truth — we re-seed both fields
+   * from the `ProjectFull` payload on load and from the
+   * `ProjectFull` returned by `createProject` after the first
+   * generation completes. After each successful iteration we
+   * bump `iterationCount` locally (the next PATCH response
+   * would also work, but the local bump keeps the UI snappy).
+   */
+  const [currentIterationCount, setCurrentIterationCount] = useState<number>(0);
+  const [currentIterationLimit, setCurrentIterationLimit] = useState<number>(0);
+
+  /* --- auth (for project cap) ------------------------------------ */
+  /*
+   * `useAuth` exposes the signed-in user's abuse-prevention
+   * counters. We watch them so the chat input can be disabled
+   * (and a clear message shown) when the user is at the
+   * project cap. The hook fetches `/api/auth/me` once on mount;
+   * `user` starts as `null` while loading.
+   */
+  const { user } = useAuth();
+
   /* --- SSE -------------------------------------------------------- */
-  const { code, status, isStreaming, error, done, title, start, iterate, reset, load } = useSSE();
+  const {
+    code,
+    status,
+    isStreaming,
+    error,
+    done,
+    title,
+    start,
+    iterate,
+    reset,
+    load,
+  } = useSSE();
 
   // Tracks whether we've already surfaced the latest `error` event
   // to the chat + toast. SSE errors arrive as events (not thrown),
@@ -252,7 +305,7 @@ export function Builder() {
    * on the very first render. Its only job is to redirect the
    * selection to the first recommended model if the default id
    * isn't present (e.g. a future backend that drops
-   * `opencode-go/minimax-m3`).
+   * `opencode-go/deepseek-v4-flash`).
    */
   useEffect(() => {
     if (models.length === 0) return;
@@ -373,19 +426,41 @@ export function Builder() {
             break;
           }
         }
+        // Defense-in-depth: derive a sensible title from the
+        // prompt locally before falling back to "Untitled". The
+        // backend does the same derivation server-side, but if
+        // the SSE `title` event arrives empty (e.g. the model
+        // skipped it) we still want a usable name on disk.
+        const titleToSave =
+          (title && title.trim()) ||
+          deriveTitleFromPrompt(prompt) ||
+          "Untitled";
         if (currentProjectId === null) {
           const created = await createProject({
-            title: title || "Untitled",
+            title: titleToSave,
             prompt,
             code,
             model: selectedModel,
           });
           setCurrentProjectId(created.id);
+          // Seed the iteration counters from the new row so the
+          // chat input is correctly enabled (count=0, limit=N) for
+          // subsequent iterations. Until the refetch, treat the
+          // backend as the source of truth.
+          setCurrentIterationCount(created.iteration_count);
+          setCurrentIterationLimit(created.iteration_limit);
         } else {
           await updateProject(currentProjectId, {
             code,
-            title: title || "Untitled",
+            title: titleToSave,
           });
+          // Bump the local iteration count so the chat input
+          // reflects the new position against the cap without
+          // waiting for a refetch. The PATCH response also carries
+          // the new counters, but the local bump keeps the UI
+          // snappy (no flash of "you have 1 of 10 left" then a
+          // jump to "you have 2 of 10 left").
+          setCurrentIterationCount((prev) => prev + 1);
         }
       } catch (err) {
         // Non-fatal — the generation itself succeeded; the save just failed.
@@ -426,7 +501,49 @@ export function Builder() {
    *     question is moot (the streaming indicator is what the
    *     user is looking at).
    */
-  const mode: BuilderMode = !isStreaming && code.length > 0 ? "iteration" : "generation";
+  const mode: BuilderMode =
+    !isStreaming && code.length > 0 ? "iteration" : "generation";
+
+  /*
+   * Abuse-prevention limit checks. Both flags are derived from
+   * state already on screen (or available via the auth hook),
+   * so they can never go stale relative to the source of truth.
+   *
+   *  - `atProjectCap` — true when the signed-in user has hit
+   *    their lifetime project cap. In generation mode this
+   *    disables "Generate"; iteration on existing projects
+   *    remains available.
+   *  - `atIterationCap` — true when the current project has
+   *    hit its iteration cap. Only meaningful in iteration
+   *    mode (when `currentProjectId` is set).
+   *  - `limitMessage` — the human-readable copy shown inline
+   *    in the chat panel when a cap is in effect. Empty when
+   *    no cap is in effect.
+   */
+  const atProjectCap = useMemo<boolean>(() => {
+    if (user === null) return false;
+    return user.lifetime_project_count >= user.project_limit;
+  }, [user]);
+
+  const atIterationCap = useMemo<boolean>(() => {
+    if (currentIterationLimit <= 0) return false;
+    return currentIterationCount >= currentIterationLimit;
+  }, [currentIterationCount, currentIterationLimit]);
+
+  const limitMessage = useMemo<string>(() => {
+    // Iteration cap takes precedence when both apply (e.g. user
+    // loaded an at-cap project, so the iteration cap is the
+    // actionable message — the project cap is moot for the
+    // current view because the user can still iterate on this
+    // project but can't create new ones).
+    if (atIterationCap && currentIterationLimit > 0) {
+      return ITERATION_LIMIT_MESSAGE(currentIterationLimit);
+    }
+    if (atProjectCap && user !== null) {
+      return PROJECT_LIMIT_MESSAGE(user.project_limit);
+    }
+    return "";
+  }, [atIterationCap, atProjectCap, user, currentIterationLimit]);
 
   const handleSend = useCallback(
     async (prompt: string): Promise<void> => {
@@ -438,6 +555,29 @@ export function Builder() {
       // than the `mode` captured in this callback's closure,
       // which may be stale across re-renders).
       const isIteration = code.length > 0;
+
+      // Local guard: refuse the send when a cap is in effect.
+      // This is a defense-in-depth check — the backend will
+      // reject with the same 429 detail if a stale UI ever
+      // slips through, and the error effect will surface it.
+      // Computing these inline (rather than using the
+      // memoised values from the closure) makes the check
+      // immune to stale-closure issues across re-renders.
+      if (
+        !isIteration &&
+        user !== null &&
+        user.lifetime_project_count >= user.project_limit
+      ) {
+        return;
+      }
+      if (
+        isIteration &&
+        currentProjectId !== null &&
+        currentIterationLimit > 0 &&
+        currentIterationCount >= currentIterationLimit
+      ) {
+        return;
+      }
 
       // Reset the timer for the new run and append the user turn
       // to BOTH the UI chat list and the backend history list.
@@ -467,11 +607,14 @@ export function Builder() {
         if (isIteration) {
           // Chat-style follow-up: hand the backend the current
           // code + full prior history so it can produce a
-          // revised version.
+          // revised version. `projectId` is REQUIRED by the
+          // backend — it scopes the iteration to the right row
+          // and is what the 429 iteration-cap check uses.
           await iterate({
             prompt: trimmed,
             currentCode: code,
             history,
+            projectId: currentProjectId ?? 0,
             model: selectedModel,
           });
         } else {
@@ -484,11 +627,25 @@ export function Builder() {
         const message = err instanceof Error ? err.message : String(err);
         if (import.meta.env.DEV) {
           // eslint-disable-next-line no-console
-          console.warn(isIteration ? "iterate() threw:" : "start() threw:", message);
+          console.warn(
+            isIteration ? "iterate() threw:" : "start() threw:",
+            message,
+          );
         }
       }
     },
-    [isStreaming, selectedModel, start, iterate, code, history],
+    [
+      isStreaming,
+      selectedModel,
+      start,
+      iterate,
+      code,
+      history,
+      user,
+      currentProjectId,
+      currentIterationCount,
+      currentIterationLimit,
+    ],
   );
 
   const handleNewProject = useCallback((): void => {
@@ -508,6 +665,10 @@ export function Builder() {
     // Forget the current project — the next "done" event will
     // create a fresh row in the backend instead of updating one.
     setCurrentProjectId(null);
+    // Clear the iteration counters — a fresh project has zero
+    // iterations against its quota.
+    setCurrentIterationCount(0);
+    setCurrentIterationLimit(0);
     // Reset the action tracker so the next completion shows
     // "Generated", not "Updated".
     lastActionRef.current = null;
@@ -578,7 +739,10 @@ export function Builder() {
       // store full conversation history — just the original prompt).
       setMessages([
         { role: "user", content: project.prompt },
-        { role: "assistant", content: "Loaded from history — code is live in the panel." },
+        {
+          role: "assistant",
+          content: "Loaded from history — code is live in the panel.",
+        },
       ]);
       /*
        * Seed the backend `history` so the first iterate-after-load
@@ -596,6 +760,11 @@ export function Builder() {
       setSelectedModel(project.model);
       // Track which project is loaded (for save-on-done updates).
       setCurrentProjectId(project.id);
+      // Seed the iteration counters from the saved project so the
+      // chat input is correctly disabled if the loaded project is
+      // already at its iteration cap.
+      setCurrentIterationCount(project.iteration_count);
+      setCurrentIterationLimit(project.iteration_limit);
       // Reveal the panels and switch to Preview so the user sees the result.
       setShowCode(true);
       setShowPreview(true);
@@ -669,6 +838,7 @@ export function Builder() {
               models={models}
               selectedModel={selectedModel}
               onModelChange={setSelectedModel}
+              limitMessage={limitMessage}
             />
           }
           codePanel={

@@ -61,6 +61,16 @@ class Settings(BaseSettings):
     # default so the dev experience is zero-config.
     BACKEND_PUBLIC_URL: str = "http://localhost:8000"
 
+    # ------------------------------------------------------------------
+    # Abuse-prevention / business-rule caps (lifetime + per-project)
+    # ------------------------------------------------------------------
+    # These are tunable via env vars so operational adjustments (e.g.
+    # raising the limit for a trusted beta cohort) do not require a
+    # code change. Defaults are the documented product caps: 2 projects
+    # per user lifetime, 10 iterations per project.
+    PROJECT_LIMIT: int = 2
+    ITERATION_LIMIT: int = 10
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

@@ -454,6 +454,64 @@ def test_extract_title_empty_title_falls_back() -> None:
     assert body == "Body of the plan."
 
 
+def test_extract_title_no_space_before_colon() -> None:
+    """``Title:`` without a space before the colon is recognised."""
+    from app.routes.generate import _extract_title
+
+    plan = "Title:No Space Plan\nBody."
+    title, body = _extract_title(plan)
+
+    assert title == "No Space Plan", f"Expected 'No Space Plan', got {title!r}"
+    assert body == "Body."
+
+
+def test_extract_title_after_blank_line() -> None:
+    """A ``Title:`` line that appears after a blank line is found."""
+    from app.routes.generate import _extract_title
+
+    plan = "\n\nTitle: Delayed Title\nBody."
+    title, body = _extract_title(plan)
+
+    assert title == "Delayed Title", f"Expected 'Delayed Title', got {title!r}"
+    assert body == "Body."
+
+
+def test_extract_title_markdown_heading() -> None:
+    """A markdown ``# Title: ...`` prefix is tolerated."""
+    from app.routes.generate import _extract_title
+
+    plan = "# Title: Markdown Plan\nBody."
+    title, body = _extract_title(plan)
+
+    assert title == "Markdown Plan", f"Expected 'Markdown Plan', got {title!r}"
+    assert body == "Body."
+
+
+def test_derive_title_from_prompt_strips_fillers() -> None:
+    """Filler words are removed and the remainder is title-cased."""
+    from app.routes.generate import _derive_title_from_prompt
+
+    assert _derive_title_from_prompt("build a todo list app") == "Todo List"
+
+
+def test_derive_title_from_prompt_caps_length() -> None:
+    """Derived titles are capped at the configured max length."""
+    from app.routes.generate import _derive_title_from_prompt
+
+    long_prompt = " ".join(["word"] * 50)
+    title = _derive_title_from_prompt(long_prompt)
+    assert len(title) <= 60
+    assert title != "Untitled"
+
+
+def test_derive_title_from_prompt_empty_prompt() -> None:
+    """An empty/unusable prompt falls back to ``Untitled``."""
+    from app.routes.generate import _derive_title_from_prompt
+
+    assert _derive_title_from_prompt("") == "Untitled"
+    assert _derive_title_from_prompt("   ") == "Untitled"
+
+
 # ---------------------------------------------------------------------------
 # Title SSE event — integration with the /api/generate stream
 # ---------------------------------------------------------------------------
@@ -552,22 +610,23 @@ async def test_generate_emits_title_event(
     ), f"Plan body should be passed to the coder. Got: {user_content!r}"
 
 
-async def test_generate_title_defaults_to_untitled(
+async def test_generate_title_derived_from_prompt(
     auth_client: AsyncClient,
     mock_client: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """When the planner omits the ``Title:`` line, ``title`` is ``"Untitled"``.
+    """When the planner omits the ``Title:`` line, derive a title from the prompt.
 
     The default ``mock_client`` fixture's ``chat()`` returns a plan that
     does NOT start with ``Title:`` — this mirrors a planner that
     ignores the system prompt. The route must still emit a ``title``
     event (rather than skipping it) so the frontend's TitleBar stays
-    in a known state. The content should be the documented default.
+    in a known state, and the title should be derived from the user's
+    prompt instead of falling back to ``"Untitled"``.
 
     Asserts:
-        * The stream contains a ``title`` event with content
-          ``"Untitled"`` when the planner output has no ``Title:`` line
+        * The stream contains a ``title`` event with a non-empty
+          content derived from the prompt
     """
     _patch_opencode_client(monkeypatch, mock_client)
 
@@ -577,7 +636,60 @@ async def test_generate_title_defaults_to_untitled(
     events = await _collect_sse_events(response)
     title_events = [e for e in events if e.get("type") == "title"]
     assert title_events, f"Expected a 'title' event even on fallback, got {events!r}"
-    assert title_events[0].get("content") == "Untitled", (
-        f"Expected 'Untitled' default title when planner omits Title:, "
+    derived_title = title_events[0].get("content")
+    assert derived_title and derived_title != "Untitled", (
+        f"Expected a derived title when planner omits Title:, "
         f"got: {title_events[0]!r}"
     )
+
+
+async def test_generate_strips_code_fences(
+    auth_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Markdown fences around the coder output are stripped from the SSE stream.
+
+    The model sometimes wraps its HTML in `` ```html `` ... `` ``` ``
+    despite the system prompt. The route must sanitise the stream so
+    the concatenated ``code`` events contain no fence markers.
+
+    Asserts:
+        * HTTP 200
+        * The concatenated code events contain no backtick fences
+        * The output still starts with ``<!DOCTYPE html>`` and ends
+          with ``</html>``
+    """
+    from unittest.mock import AsyncMock, MagicMock
+
+    fence_mock = MagicMock(name="fence_opencode_client")
+    fence_mock.chat = AsyncMock(
+        return_value="Title: Fenced App\nBuild a single-page app.",
+        name="chat",
+    )
+
+    async def _fenced_stream(*_args, **_kwargs):
+        for chunk in ("```html\n", "<!DOCTYPE html>", "<html>", "</html>", "\n```"):
+            yield chunk
+
+    fence_mock.stream_chat = MagicMock(side_effect=_fenced_stream, name="stream_chat")
+    fence_mock.close = AsyncMock(return_value=None, name="close")
+
+    _patch_opencode_client(monkeypatch, fence_mock)
+
+    response = await auth_client.post("/api/generate", json={"prompt": "make an app"})
+    assert (
+        response.status_code == 200
+    ), f"Expected 200, got {response.status_code}: {response.text}"
+
+    events = await _collect_sse_events(response)
+    code_text = "".join(e.get("content", "") for e in events if e.get("type") == "code")
+
+    assert (
+        "```" not in code_text
+    ), f"Markdown fences must be stripped from code events. Got: {code_text!r}"
+    assert code_text.startswith(
+        "<!DOCTYPE html>"
+    ), f"Sanitised output should start with <!DOCTYPE html>. Got: {code_text!r}"
+    assert code_text.rstrip().endswith(
+        "</html>"
+    ), f"Sanitised output should end with </html>. Got: {code_text!r}"

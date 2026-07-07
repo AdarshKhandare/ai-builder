@@ -132,20 +132,23 @@ async def test_migration_adds_owner_id_to_stale_table(
     This is the regression test for the production bug: a
     deployment whose ``projects`` table predates the Phase 8
     ``owner_id`` column must have the column added on next
-    startup. The migration reports exactly one applied change
-    and ``PRAGMA table_info`` reflects the new column.
+    startup. The fixture has a ``projects`` table but no ``users``
+    table, so the runner can apply the two ``projects`` migrations
+    (``owner_id`` and ``iteration_count``) while skipping the
+    ``users.lifetime_project_count`` migration.
     """
     async with stale_engine.begin() as connection:
         applied = await _run_migrations(connection)
 
-        assert applied == 1
+        assert applied == 2
         pragma_result = await connection.execute(text("PRAGMA table_info(projects)"))
         column_names = {row[1] for row in pragma_result.fetchall()}
         assert "owner_id" in column_names
+        assert "iteration_count" in column_names
 
 
 async def test_migration_is_idempotent(stale_engine: AsyncEngine) -> None:
-    """Running the migration twice adds the column exactly once.
+    """Running the migration twice adds each column exactly once.
 
     Re-running the same migration on a freshly-migrated DB is
     the steady state: every subsequent startup hits this code
@@ -161,9 +164,10 @@ async def test_migration_is_idempotent(stale_engine: AsyncEngine) -> None:
 
         pragma_result = await connection.execute(text("PRAGMA table_info(projects)"))
         column_names = [row[1] for row in pragma_result.fetchall()]
-        # Exactly one ``owner_id`` column, not duplicated by the
+        # Exactly one of each new column, not duplicated by the
         # second run.
         assert column_names.count("owner_id") == 1
+        assert column_names.count("iteration_count") == 1
 
 
 async def test_migration_is_noop_when_column_already_present(
@@ -172,10 +176,10 @@ async def test_migration_is_noop_when_column_already_present(
     """A migration entry whose target column already exists is a no-op.
 
     The normal case on a deployment that was bootstrapped
-    **after** the column was added to the ORM: the table already
-    has ``owner_id``, ``create_all`` did the right thing, and
-    the migration runner must report zero applied changes
-    without touching the table.
+    **after** the columns were added to the ORM: the table already
+    has ``owner_id`` and ``iteration_count``, ``create_all`` did
+    the right thing, and the migration runner must report zero
+    applied changes without touching the table.
     """
     async with stale_engine.begin() as connection:
         await _run_migrations(connection)
@@ -185,7 +189,7 @@ async def test_migration_is_noop_when_column_already_present(
         assert applied == 0
 
         # All original columns are still present (no accidental
-        # drops) and ``owner_id`` is the only new one.
+        # drops) plus the two new project columns.
         pragma_result = await connection.execute(text("PRAGMA table_info(projects)"))
         column_names = {row[1] for row in pragma_result.fetchall()}
         assert column_names == {
@@ -197,6 +201,7 @@ async def test_migration_is_noop_when_column_already_present(
             "created_at",
             "updated_at",
             "owner_id",
+            "iteration_count",
         }
 
 

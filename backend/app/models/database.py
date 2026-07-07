@@ -116,6 +116,9 @@ class User(Base):
         email: Primary email from GitHub. ``None`` if the user has no
             public email (the ``read:user`` scope does not grant
             access to private emails).
+        lifetime_project_count: Number of projects this user has
+            EVER created. Incremented atomically on each successful
+            ``POST /api/projects``. Never decremented on delete.
         created_at: Wall-clock time the row was first written.
         projects: SQLAlchemy relationship to the user's
             :class:`Project` rows (one-to-many).
@@ -130,6 +133,9 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(100), nullable=False)
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    lifetime_project_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
     )
@@ -171,6 +177,9 @@ class Project(Base):
             MUST set this (the route enforces it on insert). When
             set, the project is owned by that user and visible only
             to them.
+        iteration_count: Number of ``POST /api/iterate`` attempts
+            made against this project. Incremented atomically in
+            the quota dependency before streaming starts.
         created_at: Wall-clock time the row was first written. Set
             by SQLite's ``CURRENT_TIMESTAMP`` default; not touched
             on update.
@@ -194,6 +203,7 @@ class Project(Base):
         nullable=True,
         index=True,
     )
+    iteration_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
     )
@@ -334,6 +344,10 @@ class _ColumnMigration(TypedDict):
 #   raised ``sqlite3.OperationalError: no such column:
 #   projects.owner_id`` after login. The migration below brings
 #   those deployments up to date on next startup.
+# * 2026-07-07 — ``users.lifetime_project_count`` and
+#   ``projects.iteration_count`` added (abuse-prevention rules).
+#   ``lifetime_project_count`` is backfilled from the existing
+#   project count per user; ``iteration_count`` defaults to 0.
 #
 # To add a new column: append a new entry. Do not reorder or
 # rewrite existing entries — older deployments need them.
@@ -343,6 +357,18 @@ _PENDING_MIGRATIONS: list[_ColumnMigration] = [
         "column": "owner_id",
         "column_type": "INTEGER",
         "extra": "REFERENCES users(id) ON DELETE CASCADE",
+    },
+    {
+        "table": "users",
+        "column": "lifetime_project_count",
+        "column_type": "INTEGER",
+        "extra": "NOT NULL DEFAULT 0",
+    },
+    {
+        "table": "projects",
+        "column": "iteration_count",
+        "column_type": "INTEGER",
+        "extra": "NOT NULL DEFAULT 0",
     },
 ]
 
@@ -480,7 +506,76 @@ async def _run_lightweight_migrations(connection: AsyncConnection) -> int:
                 exc,
             )
 
+    # Best-effort backfill: existing users created before the
+    # ``lifetime_project_count`` column was added should have the
+    # counter set to the number of projects they currently own.
+    # The guard ensures this only runs when there is work to do.
+    await _backfill_lifetime_project_count(connection)
+
     return applied
+
+
+async def _table_exists(connection: AsyncConnection, table: str) -> bool:
+    """Return ``True`` if ``table`` exists in the current database.
+
+    Args:
+        connection: Open async connection.
+        table: Table name to check.
+
+    Returns:
+        ``True`` if ``PRAGMA table_info`` returns at least one row.
+    """
+    try:
+        result = await connection.execute(text(f"PRAGMA table_info({table})"))
+        return bool(result.fetchall())
+    except SQLAlchemyError:
+        return False
+
+
+async def _backfill_lifetime_project_count(connection: AsyncConnection) -> None:
+    """Backfill ``users.lifetime_project_count`` from project ownership.
+
+    Idempotent one-time correction for deployments that existed before
+    the ``lifetime_project_count`` column was added. Sets the counter
+    to the current number of owned projects for any user whose counter
+    is zero but who owns at least one project. New users with no
+    projects are untouched.
+
+    Args:
+        connection: Open async connection inside a transaction.
+    """
+    if not (
+        await _table_exists(connection, "users")
+        and await _table_exists(connection, "projects")
+    ):
+        return
+
+    # Guard: only run if at least one user needs backfilling.
+    guard_stmt = text(
+        "SELECT 1 FROM users "
+        "WHERE lifetime_project_count = 0 "
+        "  AND EXISTS (SELECT 1 FROM projects WHERE projects.owner_id = users.id) "
+        "LIMIT 1"
+    )
+    try:
+        guard_result = await connection.execute(guard_stmt)
+        if not guard_result.scalar_one_or_none():
+            return
+
+        update_stmt = text(
+            "UPDATE users "
+            "SET lifetime_project_count = ("
+            "    SELECT COUNT(*) FROM projects WHERE projects.owner_id = users.id"
+            ") "
+            "WHERE lifetime_project_count = 0"
+        )
+        result = await connection.execute(update_stmt)
+        logger.info(
+            "Backfilled lifetime_project_count for %s existing user(s)",
+            result.rowcount,
+        )
+    except SQLAlchemyError as exc:
+        logger.warning("Backfill of lifetime_project_count failed: %s", exc)
 
 
 async def init_db() -> None:

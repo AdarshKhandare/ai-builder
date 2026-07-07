@@ -104,6 +104,17 @@ interface ChatPanelProps {
   selectedModel?: string
   /** Called when the user picks a different model from the picker. */
   onModelChange?: (model: string) => void
+  /**
+   * Abuse-prevention copy. When non-empty, the input and send
+   * button are disabled, and the message is rendered inline
+   * above the input with `aria-live="polite"` so screen-reader
+   * users hear why they can't send.
+   *
+   * The Builder computes this string from the user's project
+   * cap (against `lifetime_project_count`) and the current
+   * project's iteration cap (against `iteration_count`).
+   */
+  limitMessage?: string
 }
 
 /**
@@ -135,6 +146,7 @@ export function ChatPanel({
   models,
   selectedModel,
   onModelChange,
+  limitMessage = '',
 }: ChatPanelProps) {
   const [input, setInput] = useState('')
   const scrollAnchorRef = useRef<HTMLDivElement>(null)
@@ -191,7 +203,7 @@ export function ChatPanel({
 
   const handleSend = () => {
     const trimmed = input.trim()
-    if (!trimmed || isStreaming) return
+    if (!trimmed || isStreaming || limitMessage) return
     onSend(trimmed)
     setInput('')
     // Re-engage auto-scroll after the next render commits.
@@ -253,7 +265,17 @@ export function ChatPanel({
         ? 'Describe the app you want to build…'
         : 'Describe your app...'
 
-  const canSend = input.trim().length > 0 && !isStreaming
+  /*
+   * A non-empty `limitMessage` is the "abuse-prevention cap
+   * reached" signal from the Builder. The input + send button
+   * are disabled while it's in effect, and the message itself
+   * is rendered inline above the input. The Builder also
+   * refuses to call `onSend` while the cap is active — this
+   * is a UI guard, the source of truth lives in the Builder's
+   * `handleSend`.
+   */
+  const atLimit = limitMessage.length > 0
+  const canSend = input.trim().length > 0 && !isStreaming && !atLimit
   const showScrollLock = isStreaming && !isAtBottom && messages.length > 0
 
   return (
@@ -277,9 +299,14 @@ export function ChatPanel({
           <FullWidthEmptyState
             onSuggestion={onSend}
             isStreaming={isStreaming}
+            disabled={atLimit}
           />
         ) : (
-          <CompactEmptyState onSuggestion={onSend} isStreaming={isStreaming} />
+          <CompactEmptyState
+            onSuggestion={onSend}
+            isStreaming={isStreaming}
+            disabled={atLimit}
+          />
         )
       ) : (
         <ScrollArea className="flex-1">
@@ -339,6 +366,28 @@ export function ChatPanel({
             : 'shrink-0 border-t border-border bg-card p-2.5 sm:p-3'
         }
       >
+        {/*
+         * Abuse-prevention limit message. Rendered with
+         * `aria-live="polite"` so screen-readers announce it
+         * when it appears (and when it changes between
+         * project-cap and iteration-cap states). Visually a
+         * small banner above the input — same surface, same
+         * density, no layout shift when the message is empty.
+         */}
+        {atLimit ? (
+          <div
+            role="status"
+            aria-live="polite"
+            data-testid="chat-limit-message"
+            className={
+              fullWidth
+                ? 'mx-auto mb-2 max-w-2xl rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground'
+                : 'mb-2 rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground'
+            }
+          >
+            {limitMessage}
+          </div>
+        ) : null}
         <div
           className={
             fullWidth
@@ -366,7 +415,7 @@ export function ChatPanel({
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
-            disabled={isStreaming}
+            disabled={isStreaming || atLimit}
             className="min-w-0 flex-1 bg-background-sunken"
             aria-label="Prompt input"
           />
@@ -421,13 +470,17 @@ export function ChatPanel({
 interface EmptyStateProps {
   onSuggestion: (prompt: string) => void
   isStreaming: boolean
+  /** True when a project/iteration cap is in effect; disables
+   *  the suggestion chips so the user can't trigger a send. */
+  disabled?: boolean
 }
 
 /**
  * Compact empty state — chat is in a side panel next to code/preview.
  * Small heading, small chips. Same density as before.
  */
-function CompactEmptyState({ onSuggestion, isStreaming }: EmptyStateProps) {
+function CompactEmptyState({ onSuggestion, isStreaming, disabled = false }: EmptyStateProps) {
+  const isDisabled = isStreaming || disabled
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-5 px-6 py-8 text-center">
       <div className="flex flex-col items-center gap-2">
@@ -444,7 +497,7 @@ function CompactEmptyState({ onSuggestion, isStreaming }: EmptyStateProps) {
             key={suggestion}
             type="button"
             onClick={() => onSuggestion(suggestion)}
-            disabled={isStreaming}
+            disabled={isDisabled}
             className="cursor-pointer rounded-full bg-secondary px-3 py-1.5 text-xs text-secondary-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50"
           >
             {suggestion}
@@ -464,7 +517,8 @@ function CompactEmptyState({ onSuggestion, isStreaming }: EmptyStateProps) {
  * so it stays vertically centred even if the panel is much taller
  * than its content.
  */
-function FullWidthEmptyState({ onSuggestion, isStreaming }: EmptyStateProps) {
+function FullWidthEmptyState({ onSuggestion, isStreaming, disabled = false }: EmptyStateProps) {
+  const isDisabled = isStreaming || disabled
   return (
     <div className="flex flex-1 items-center justify-center px-6 py-10">
       <motion.div
@@ -501,7 +555,7 @@ function FullWidthEmptyState({ onSuggestion, isStreaming }: EmptyStateProps) {
               key={suggestion}
               type="button"
               onClick={() => onSuggestion(suggestion)}
-              disabled={isStreaming}
+              disabled={isDisabled}
               className="
                 cursor-pointer rounded-full bg-secondary px-4 py-2.5 text-sm
                 text-secondary-foreground

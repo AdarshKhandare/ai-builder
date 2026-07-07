@@ -30,12 +30,12 @@
  *    `useReducedMotion` hook AND the `gsap.context` early-return
  *    in the `useGSAP` body.
  */
-import { useRef, type ReactNode } from "react"
-import { Link, useNavigate } from "react-router-dom"
-import { motion, useReducedMotion } from "framer-motion"
-import gsap from "gsap"
-import { ScrollTrigger } from "gsap/ScrollTrigger"
-import { useGSAP } from "@gsap/react"
+import { useRef, type ReactNode } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { motion, useReducedMotion } from "framer-motion";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { useGSAP } from "@gsap/react";
 import {
   Sparkles,
   Eye,
@@ -50,17 +50,17 @@ import {
   Bot,
   CheckCircle2,
   Sparkle,
-} from "lucide-react"
+} from "lucide-react";
 
-import { Button } from "@/components/ui/button"
-import { buttonTap } from "@/lib/motion"
+import { Button } from "@/components/ui/button";
+import { buttonTap } from "@/lib/motion";
 
 /* ------------------------------------------------------------------ */
 /* GSAP plugin registration (once per module)                          */
 /* ------------------------------------------------------------------ */
 
 if (typeof window !== "undefined") {
-  gsap.registerPlugin(ScrollTrigger, useGSAP)
+  gsap.registerPlugin(ScrollTrigger, useGSAP);
 }
 
 /* ------------------------------------------------------------------ */
@@ -82,7 +82,7 @@ const HERO_GRID_STYLE: React.CSSProperties = {
     "radial-gradient(ellipse 80% 60% at 50% 35%, black 25%, transparent 80%)",
   WebkitMaskImage:
     "radial-gradient(ellipse 80% 60% at 50% 35%, black 25%, transparent 80%)",
-}
+};
 
 /**
  * Subtle primary wash near the top of the hero. Uses the
@@ -91,7 +91,7 @@ const HERO_GRID_STYLE: React.CSSProperties = {
 const HERO_WASH_STYLE: React.CSSProperties = {
   backgroundImage:
     "radial-gradient(ellipse 50% 40% at 50% 0%, color-mix(in oklch, var(--primary) 10%, transparent), transparent 70%)",
-}
+};
 
 /**
  * Gradient text style — "Forge builds it." uses a subtle blue
@@ -101,11 +101,11 @@ const HERO_WASH_STYLE: React.CSSProperties = {
  */
 const GRADIENT_TEXT_STYLE: React.CSSProperties = {
   backgroundImage:
-    "linear-gradient(135deg, var(--primary) 0%, color-mix(in oklch, var(--primary) 80%, black) 50%, color-mix(in oklch, var(--primary) 60%, black) 100%)",
+    "linear-gradient(135deg, var(--primary) 0%, color-mix(in oklch, var(--primary) 80%, var(--foreground)) 50%, color-mix(in oklch, var(--primary) 60%, var(--foreground)) 100%)",
   WebkitBackgroundClip: "text",
   backgroundClip: "text",
   color: "transparent",
-}
+};
 
 /* ------------------------------------------------------------------ */
 /* Data                                                                */
@@ -115,7 +115,7 @@ const NAV_LINKS: ReadonlyArray<{ label: string; href: string }> = [
   { label: "Features", href: "#features" },
   { label: "How it Works", href: "#how" },
   { label: "Examples", href: "#examples" },
-]
+];
 
 const TECH_MARQUEE_ITEMS: ReadonlyArray<string> = [
   "React",
@@ -130,12 +130,12 @@ const TECH_MARQUEE_ITEMS: ReadonlyArray<string> = [
   "Vercel",
   "OpenCode",
   "Docker",
-]
+];
 
 interface Feature {
-  icon: typeof Sparkles
-  title: string
-  description: string
+  icon: typeof Sparkles;
+  title: string;
+  description: string;
 }
 
 const FEATURES: ReadonlyArray<Feature> = [
@@ -175,13 +175,13 @@ const FEATURES: ReadonlyArray<Feature> = [
     description:
       "Download as a ZIP with index.html + README. Deploy anywhere. Your code, your ownership.",
   },
-]
+];
 
 interface Step {
-  number: string
-  icon: typeof Hammer
-  title: string
-  description: string
+  number: string;
+  icon: typeof Hammer;
+  title: string;
+  description: string;
 }
 
 const STEPS: ReadonlyArray<Step> = [
@@ -210,26 +210,24 @@ const STEPS: ReadonlyArray<Step> = [
     number: "04",
     icon: Hammer,
     title: "Iterate",
-    description:
-      "Refine with chat. Download as ZIP. Ship it.",
+    description: "Refine with chat. Download as ZIP. Ship it.",
   },
-]
+];
 
 interface Example {
-  title: string
-  description: string
-  model: string
+  title: string;
+  description: string;
+  model: string;
   /** A short label rendered inside the gradient placeholder. */
-  previewLabel: string
+  previewLabel: string;
   /** A two-stop CSS gradient for the placeholder. */
-  gradient: string
+  gradient: string;
 }
 
 const EXAMPLES: ReadonlyArray<Example> = [
   {
     title: "Coffee Shop Landing",
-    description:
-      "A warm, inviting landing page for a specialty coffee shop.",
+    description: "A warm, inviting landing page for a specialty coffee shop.",
     model: "MiniMax M3",
     previewLabel: "coffee shop",
     gradient:
@@ -259,16 +257,16 @@ const EXAMPLES: ReadonlyArray<Example> = [
     gradient:
       "linear-gradient(135deg, color-mix(in oklch, var(--chart-4) 35%, transparent), color-mix(in oklch, var(--chart-4) 12%, transparent))",
   },
-]
+];
 
 /* ------------------------------------------------------------------ */
 /* Page                                                                */
 /* ------------------------------------------------------------------ */
 
 export function Landing(): ReactNode {
-  const navigate = useNavigate()
-  const rootRef = useRef<HTMLDivElement | null>(null)
-  const prefersReducedMotion = useReducedMotion() ?? false
+  const navigate = useNavigate();
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const prefersReducedMotion = useReducedMotion() ?? false;
 
   /*
    * GSAP / ScrollTrigger setup. See `useGSAP` for cleanup /
@@ -281,8 +279,8 @@ export function Landing(): ReactNode {
         // animation, no scroll triggers. The CSS reduced-motion
         // media query in `animations.css` ALSO collapses the
         // marquee + glow effects; this is the JS counterpart.
-        gsap.set("[data-gsap-reveal]", { opacity: 1, y: 0 })
-        return
+        gsap.set("[data-gsap-reveal]", { opacity: 1, y: 0 });
+        return;
       }
 
       // ── Hero entrance ───────────────────────────────────
@@ -293,7 +291,7 @@ export function Landing(): ReactNode {
         duration: 0.5,
         ease: "power3.out",
         delay: 0.05,
-      })
+      });
       gsap.from(".hero-headline", {
         opacity: 0,
         y: 28,
@@ -301,14 +299,14 @@ export function Landing(): ReactNode {
         ease: "power3.out",
         stagger: 0.1,
         delay: 0.1,
-      })
+      });
       gsap.from(".hero-sub", {
         opacity: 0,
         y: 18,
         duration: 0.7,
         ease: "power3.out",
         delay: 0.35,
-      })
+      });
       gsap.from(".hero-cta", {
         opacity: 0,
         y: 12,
@@ -316,14 +314,14 @@ export function Landing(): ReactNode {
         ease: "power3.out",
         stagger: 0.08,
         delay: 0.5,
-      })
+      });
       gsap.from(".hero-mockup", {
         opacity: 0,
         y: 32,
         duration: 0.9,
         ease: "power3.out",
         delay: 0.7,
-      })
+      });
 
       // Gentle float on the mockup. Loops forever; gsap will
       // auto-rewind. The `prefersReducedMotion` early-return
@@ -335,7 +333,7 @@ export function Landing(): ReactNode {
         yoyo: true,
         repeat: -1,
         delay: 1.6,
-      })
+      });
 
       // ── Features stagger on scroll ──────────────────────
       ScrollTrigger.batch("[data-gsap-feature]", {
@@ -348,7 +346,7 @@ export function Landing(): ReactNode {
             ease: "power3.out",
             stagger: 0.08,
           }),
-      })
+      });
 
       // ── Steps stagger on scroll ─────────────────────────
       ScrollTrigger.batch("[data-gsap-step]", {
@@ -361,7 +359,7 @@ export function Landing(): ReactNode {
             ease: "power3.out",
             stagger: 0.1,
           }),
-      })
+      });
 
       // ── Examples stagger on scroll ──────────────────────
       ScrollTrigger.batch("[data-gsap-example]", {
@@ -374,7 +372,7 @@ export function Landing(): ReactNode {
             ease: "power3.out",
             stagger: 0.08,
           }),
-      })
+      });
 
       // ── Generic reveal ──────────────────────────────────
       // Anything tagged `data-gsap-reveal` (other than the
@@ -382,9 +380,9 @@ export function Landing(): ReactNode {
       // it scrolls into view. Used for the testimonial +
       // CTA block, etc.
       gsap.utils.toArray<HTMLElement>("[data-gsap-reveal]").forEach((el) => {
-        if (el.hasAttribute("data-gsap-feature")) return
-        if (el.hasAttribute("data-gsap-step")) return
-        if (el.hasAttribute("data-gsap-example")) return
+        if (el.hasAttribute("data-gsap-feature")) return;
+        if (el.hasAttribute("data-gsap-step")) return;
+        if (el.hasAttribute("data-gsap-example")) return;
         ScrollTrigger.create({
           trigger: el,
           start: "top 88%",
@@ -395,15 +393,15 @@ export function Landing(): ReactNode {
               duration: 0.6,
               ease: "power3.out",
             }),
-        })
-      })
+        });
+      });
     },
     { scope: rootRef, dependencies: [prefersReducedMotion] },
-  )
+  );
 
   const onStart = (): void => {
-    navigate("/login")
-  }
+    navigate("/login");
+  };
 
   return (
     <div ref={rootRef} className="min-h-dvh bg-background text-foreground">
@@ -417,7 +415,7 @@ export function Landing(): ReactNode {
       <CallToAction onStart={onStart} />
       <Footer />
     </div>
-  )
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -425,7 +423,7 @@ export function Landing(): ReactNode {
 /* ------------------------------------------------------------------ */
 
 interface NavBarProps {
-  onStart: () => void
+  onStart: () => void;
 }
 
 /**
@@ -440,9 +438,8 @@ function NavBar({ onStart }: NavBarProps): ReactNode {
       className="
         sticky top-0 z-sticky
         border-b border-border-subtle
-        bg-card/80 backdrop-blur-md
-      "
-    >
+        bg-card/80 backdrop-blur-md z-99
+      ">
       <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
         {/* Left — logo */}
         <Link
@@ -453,16 +450,14 @@ function NavBar({ onStart }: NavBarProps): ReactNode {
             rounded-md outline-none
             focus-visible:ring-2 focus-visible:ring-ring
             focus-visible:ring-offset-2 focus-visible:ring-offset-card
-          "
-        >
+          ">
           <span
             aria-hidden="true"
             className="
               flex size-7 items-center justify-center
               rounded-md bg-accent text-accent-foreground
               transition-colors group-hover:bg-primary/15
-            "
-          >
+            ">
             <Hammer className="size-4 text-primary" />
           </span>
           <span className="font-body text-base font-semibold tracking-tight text-foreground transition-opacity group-hover:opacity-80">
@@ -471,10 +466,7 @@ function NavBar({ onStart }: NavBarProps): ReactNode {
         </Link>
 
         {/* Center — nav links (hidden on mobile) */}
-        <nav
-          aria-label="Primary"
-          className="hidden items-center gap-1 md:flex"
-        >
+        <nav aria-label="Primary" className="hidden items-center gap-1 md:flex">
           {NAV_LINKS.map((link) => (
             <a
               key={link.href}
@@ -487,8 +479,7 @@ function NavBar({ onStart }: NavBarProps): ReactNode {
                 focus-visible:outline-none focus-visible:ring-2
                 focus-visible:ring-ring focus-visible:ring-offset-2
                 focus-visible:ring-offset-card
-              "
-            >
+              ">
               {link.label}
             </a>
           ))}
@@ -509,14 +500,12 @@ function NavBar({ onStart }: NavBarProps): ReactNode {
               focus-visible:outline-none focus-visible:ring-2
               focus-visible:ring-ring focus-visible:ring-offset-2
               focus-visible:ring-offset-card
-            "
-          >
+            ">
             <svg
               viewBox="0 0 24 24"
               fill="currentColor"
               aria-hidden="true"
-              className="size-4"
-            >
+              className="size-4">
               <path
                 fillRule="evenodd"
                 clipRule="evenodd"
@@ -524,18 +513,14 @@ function NavBar({ onStart }: NavBarProps): ReactNode {
               />
             </svg>
           </a>
-          <Button
-            size="sm"
-            onClick={onStart}
-            className="gap-1.5 shadow-sm"
-          >
+          <Button size="sm" onClick={onStart} className="gap-1.5 shadow-sm">
             Try it
             <ArrowRight className="size-3.5" aria-hidden="true" />
           </Button>
         </div>
       </div>
     </header>
-  )
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -543,7 +528,7 @@ function NavBar({ onStart }: NavBarProps): ReactNode {
 /* ------------------------------------------------------------------ */
 
 interface HeroProps {
-  onStart: () => void
+  onStart: () => void;
 }
 
 /**
@@ -560,10 +545,13 @@ function Hero({ onStart }: HeroProps): ReactNode {
   return (
     <section
       id="hero"
-      className="relative isolate flex items-center justify-center overflow-hidden border-b border-border-subtle"
-    >
+      className="relative isolate flex items-center justify-center overflow-hidden border-b border-border-subtle">
       {/* Background layers */}
-      <div aria-hidden className="absolute inset-0 -z-10" style={HERO_GRID_STYLE} />
+      <div
+        aria-hidden
+        className="absolute inset-0 -z-10"
+        style={HERO_GRID_STYLE}
+      />
       <div
         aria-hidden
         className="absolute inset-x-0 top-0 -z-10 h-[60%]"
@@ -586,20 +574,18 @@ function Hero({ onStart }: HeroProps): ReactNode {
 
         {/* Headline */}
         <h1 className="mt-7 font-display text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl">
-          <span className="hero-headline block text-foreground">Describe it.</span>
-          <span
-            className="hero-headline block"
-            style={GRADIENT_TEXT_STYLE}
-          >
+          <span className="hero-headline block text-foreground">
+            Describe it.
+          </span>
+          <span className="hero-headline block" style={GRADIENT_TEXT_STYLE}>
             Forge builds it.
           </span>
         </h1>
 
         {/* Subheadline */}
         <p className="hero-sub mt-6 max-w-2xl text-balance text-base leading-relaxed text-muted-foreground sm:text-lg">
-          An AI web builder that turns natural language into working
-          web apps. Streamed in real-time, previewed instantly,
-          downloadable as code.
+          An AI web builder that turns natural language into working web apps.
+          Streamed in real-time, previewed instantly, downloadable as code.
         </p>
 
         {/* CTAs */}
@@ -607,8 +593,7 @@ function Hero({ onStart }: HeroProps): ReactNode {
           <Button
             size="lg"
             onClick={onStart}
-            className="group min-w-44 gap-2 px-6 text-base shadow-sm"
-          >
+            className="group min-w-44 gap-2 px-6 text-base shadow-sm">
             Start building
             <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
           </Button>
@@ -616,8 +601,7 @@ function Hero({ onStart }: HeroProps): ReactNode {
             size="lg"
             variant="ghost"
             className="min-w-44 gap-2 text-base text-muted-foreground hover:text-foreground"
-            asChild
-          >
+            asChild>
             <a href="#examples">
               See examples
               <ChevronRight className="size-4" />
@@ -641,7 +625,7 @@ function Hero({ onStart }: HeroProps): ReactNode {
         </div>
       </div>
     </section>
-  )
+  );
 }
 
 /**
@@ -659,8 +643,7 @@ function BuilderMockup(): ReactNode {
         relative overflow-hidden rounded-2xl
         border border-border bg-card
         shadow-md
-      "
-    >
+      ">
       {/* Top chrome bar */}
       <div className="flex items-center gap-1.5 border-b border-border-subtle px-3 py-2">
         <span className="size-2.5 rounded-full bg-muted-foreground/40" />
@@ -708,13 +691,9 @@ function BuilderMockup(): ReactNode {
           style={{
             backgroundImage:
               "linear-gradient(135deg, color-mix(in oklch, var(--primary) 12%, transparent), color-mix(in oklch, var(--primary) 4%, transparent))",
-          }}
-        >
+          }}>
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-            <Sparkle
-              className="size-4 text-primary"
-              aria-hidden="true"
-            />
+            <Sparkle className="size-4 text-primary" aria-hidden="true" />
             <span className="font-display text-sm font-semibold text-foreground">
               Live preview
             </span>
@@ -725,7 +704,7 @@ function BuilderMockup(): ReactNode {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -743,13 +722,12 @@ function BuilderMockup(): ReactNode {
 function TechMarquee(): ReactNode {
   // Duplicate the list once so the keyframe can loop seamlessly
   // by translating -50% (one full set).
-  const items = [...TECH_MARQUEE_ITEMS, ...TECH_MARQUEE_ITEMS]
+  const items = [...TECH_MARQUEE_ITEMS, ...TECH_MARQUEE_ITEMS];
 
   return (
     <section
       aria-label="Tech stack"
-      className="border-b border-border-subtle py-12"
-    >
+      className="border-b border-border-subtle py-12">
       <p className="mb-6 text-center text-xs uppercase tracking-widest text-muted-foreground">
         Built with
       </p>
@@ -757,16 +735,14 @@ function TechMarquee(): ReactNode {
         className="
           group relative w-full overflow-hidden
           [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]
-        "
-      >
+        ">
         <div
           className="
             flex w-max shrink-0 items-center gap-12
             animate-[marquee_30s_linear_infinite]
             group-hover:[animation-play-state:paused]
             motion-reduce:animate-none
-          "
-        >
+          ">
           {items.map((name, i) => (
             <span
               key={`${name}-${i}`}
@@ -774,8 +750,7 @@ function TechMarquee(): ReactNode {
                 shrink-0 font-display text-xl font-medium
                 text-muted-foreground/60 transition-colors
                 hover:text-foreground/80
-              "
-            >
+              ">
               {name}
             </span>
           ))}
@@ -793,7 +768,7 @@ function TechMarquee(): ReactNode {
         }
       `}</style>
     </section>
-  )
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -809,13 +784,11 @@ function Features(): ReactNode {
   return (
     <section
       id="features"
-      className="border-b border-border-subtle py-24 sm:py-32"
-    >
+      className="border-b border-border-subtle py-24 sm:py-32">
       <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
         <div
           data-gsap-reveal
-          className="mx-auto max-w-2xl text-center opacity-0"
-        >
+          className="mx-auto max-w-2xl text-center opacity-0">
           <p className="text-sm font-medium uppercase tracking-widest text-primary">
             What you get
           </p>
@@ -834,11 +807,11 @@ function Features(): ReactNode {
         </div>
       </div>
     </section>
-  )
+  );
 }
 
 function FeatureCard({ feature }: { feature: Feature }): ReactNode {
-  const Icon = feature.icon
+  const Icon = feature.icon;
   return (
     <article
       data-gsap-feature
@@ -850,8 +823,7 @@ function FeatureCard({ feature }: { feature: Feature }): ReactNode {
         transition-all duration-200
         hover:-translate-y-0.5 hover:border-primary/40
         hover:shadow-glow
-      "
-    >
+      ">
       <div className="flex size-10 items-center justify-center rounded-lg bg-accent text-primary">
         <Icon className="size-5" aria-hidden="true" />
       </div>
@@ -862,7 +834,7 @@ function FeatureCard({ feature }: { feature: Feature }): ReactNode {
         {feature.description}
       </p>
     </article>
-  )
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -877,15 +849,11 @@ function FeatureCard({ feature }: { feature: Feature }): ReactNode {
  */
 function HowItWorks(): ReactNode {
   return (
-    <section
-      id="how"
-      className="border-b border-border-subtle py-24 sm:py-32"
-    >
+    <section id="how" className="border-b border-border-subtle py-24 sm:py-32">
       <div className="mx-auto w-full max-w-5xl px-4 sm:px-6">
         <div
           data-gsap-reveal
-          className="mx-auto max-w-2xl text-center opacity-0"
-        >
+          className="mx-auto max-w-2xl text-center opacity-0">
           <p className="text-sm font-medium uppercase tracking-widest text-primary">
             How it works
           </p>
@@ -909,24 +877,22 @@ function HowItWorks(): ReactNode {
         </ol>
       </div>
     </section>
-  )
+  );
 }
 
 function StepCard({ step }: { step: Step }): ReactNode {
-  const Icon = step.icon
+  const Icon = step.icon;
   return (
     <li
       data-gsap-step
       data-gsap-reveal
-      className="relative flex flex-col items-center text-center opacity-0"
-    >
+      className="relative flex flex-col items-center text-center opacity-0">
       <div
         className="
           relative z-10 flex size-14 items-center justify-center
           rounded-full border border-border bg-card text-primary
           shadow-xs
-        "
-      >
+        ">
         <Icon className="size-5" aria-hidden="true" />
       </div>
       <div className="mt-4 font-mono text-xs font-medium tracking-widest text-muted-foreground">
@@ -939,7 +905,7 @@ function StepCard({ step }: { step: Step }): ReactNode {
         {step.description}
       </p>
     </li>
-  )
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -958,13 +924,11 @@ function ExampleGallery(): ReactNode {
   return (
     <section
       id="examples"
-      className="border-b border-border-subtle py-24 sm:py-32"
-    >
+      className="border-b border-border-subtle py-24 sm:py-32">
       <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
         <div
           data-gsap-reveal
-          className="mx-auto max-w-2xl text-center opacity-0"
-        >
+          className="mx-auto max-w-2xl text-center opacity-0">
           <p className="text-sm font-medium uppercase tracking-widest text-primary">
             Examples
           </p>
@@ -983,7 +947,7 @@ function ExampleGallery(): ReactNode {
         </div>
       </div>
     </section>
-  )
+  );
 }
 
 function ExampleCard({ example }: { example: Example }): ReactNode {
@@ -998,13 +962,11 @@ function ExampleCard({ example }: { example: Example }): ReactNode {
         transition-all duration-200
         hover:-translate-y-0.5 hover:border-primary/40
         hover:shadow-glow
-      "
-    >
+      ">
       {/* Screenshot placeholder — gradient + label */}
       <div
         className="relative aspect-[4/3] w-full overflow-hidden"
-        style={{ backgroundImage: example.gradient }}
-      >
+        style={{ backgroundImage: example.gradient }}>
         <div className="absolute inset-0 flex items-center justify-center">
           <span className="font-display text-lg font-medium text-foreground/70">
             {example.previewLabel}
@@ -1018,8 +980,7 @@ function ExampleCard({ example }: { example: Example }): ReactNode {
             bg-background/50 opacity-0 backdrop-blur-[1px]
             transition-opacity
             group-hover:opacity-100
-          "
-        >
+          ">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground">
             View
             <ArrowUpRight className="size-3" aria-hidden="true" />
@@ -1041,7 +1002,7 @@ function ExampleCard({ example }: { example: Example }): ReactNode {
         </div>
       </div>
     </article>
-  )
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -1057,19 +1018,14 @@ function Testimonial(): ReactNode {
   return (
     <section
       aria-label="Builder quote"
-      className="border-b border-border-subtle py-24 sm:py-32"
-    >
+      className="border-b border-border-subtle py-24 sm:py-32">
       <div className="mx-auto w-full max-w-3xl px-4 sm:px-6">
-        <figure
-          data-gsap-reveal
-          className="text-center opacity-0"
-        >
+        <figure data-gsap-reveal className="text-center opacity-0">
           <blockquote className="font-display text-2xl leading-snug text-foreground sm:text-3xl">
             <p>
               <span className="text-muted-foreground">“</span>
-              Forge demonstrates what's possible with cheap open AI
-              models — a full web builder that costs less than a
-              cent per app.
+              Forge demonstrates what's possible with cheap open AI models — a
+              full web builder that costs less than a cent per app.
               <span className="text-muted-foreground">”</span>
             </p>
           </blockquote>
@@ -1079,7 +1035,7 @@ function Testimonial(): ReactNode {
         </figure>
       </div>
     </section>
-  )
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -1101,22 +1057,20 @@ function CallToAction({ onStart }: { onStart: () => void }): ReactNode {
           style={{
             backgroundImage:
               "radial-gradient(ellipse 60% 80% at 50% 0%, color-mix(in oklch, var(--primary) 8%, transparent), transparent 60%)",
-          }}
-        >
+          }}>
           <h2 className="font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
             Ready to build something?
           </h2>
           <p className="mx-auto mt-4 max-w-md text-base text-muted-foreground">
-            No signup required for the demo. Start describing and
-            watch Forge build it.
+            No signup required for the demo. Start describing and watch Forge
+            build it.
           </p>
           <div className="mt-8 flex justify-center">
             <motion.div {...buttonTap}>
               <Button
                 size="lg"
                 onClick={onStart}
-                className="group gap-2 px-8 text-base shadow-sm"
-              >
+                className="group gap-2 px-8 text-base shadow-sm">
                 Start building
                 <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
               </Button>
@@ -1125,7 +1079,7 @@ function CallToAction({ onStart }: { onStart: () => void }): ReactNode {
         </div>
       </div>
     </section>
-  )
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -1133,7 +1087,7 @@ function CallToAction({ onStart }: { onStart: () => void }): ReactNode {
 /* ------------------------------------------------------------------ */
 
 function Footer(): ReactNode {
-  const year = new Date().getFullYear()
+  const year = new Date().getFullYear();
   return (
     <footer className="border-t border-border-subtle py-10">
       <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-8 px-4 sm:px-6 md:grid-cols-4">
@@ -1147,16 +1101,14 @@ function Footer(): ReactNode {
               rounded-md outline-none
               focus-visible:ring-2 focus-visible:ring-ring
               focus-visible:ring-offset-2 focus-visible:ring-offset-background
-            "
-          >
+            ">
             <span
               aria-hidden="true"
               className="
                 flex size-7 items-center justify-center
                 rounded-md bg-accent text-accent-foreground
                 transition-colors group-hover:bg-primary/15
-              "
-            >
+              ">
               <Hammer className="size-4 text-primary" />
             </span>
             <span className="font-body text-sm font-semibold text-foreground transition-opacity group-hover:opacity-80">
@@ -1177,24 +1129,21 @@ function Footer(): ReactNode {
             <li>
               <a
                 href="#features"
-                className="text-muted-foreground transition-colors hover:text-foreground"
-              >
+                className="text-muted-foreground transition-colors hover:text-foreground">
                 Features
               </a>
             </li>
             <li>
               <a
                 href="#examples"
-                className="text-muted-foreground transition-colors hover:text-foreground"
-              >
+                className="text-muted-foreground transition-colors hover:text-foreground">
                 Examples
               </a>
             </li>
             <li>
               <a
                 href="#how"
-                className="text-muted-foreground transition-colors hover:text-foreground"
-              >
+                className="text-muted-foreground transition-colors hover:text-foreground">
                 How it Works
               </a>
             </li>
@@ -1212,8 +1161,7 @@ function Footer(): ReactNode {
                 href="https://github.com/AdarshKhandare/ai-builder"
                 target="_blank"
                 rel="noreferrer noopener"
-                className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
-              >
+                className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground">
                 GitHub
                 <ArrowUpRight className="size-3" aria-hidden="true" />
               </a>
@@ -1223,8 +1171,7 @@ function Footer(): ReactNode {
                 href="https://github.com/AdarshKhandare/ai-builder#readme"
                 target="_blank"
                 rel="noreferrer noopener"
-                className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
-              >
+                className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground">
                 Docs
                 <ArrowUpRight className="size-3" aria-hidden="true" />
               </a>
@@ -1243,8 +1190,7 @@ function Footer(): ReactNode {
                 href="https://adarshweb.in"
                 target="_blank"
                 rel="noreferrer noopener"
-                className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
-              >
+                className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground">
                 adarshweb.in
                 <ArrowUpRight className="size-3" aria-hidden="true" />
               </a>
@@ -1254,8 +1200,7 @@ function Footer(): ReactNode {
                 href="https://github.com/AdarshKhandare"
                 target="_blank"
                 rel="noreferrer noopener"
-                className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
-              >
+                className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground">
                 GitHub
                 <ArrowUpRight className="size-3" aria-hidden="true" />
               </a>
@@ -1271,13 +1216,12 @@ function Footer(): ReactNode {
             href="https://github.com/AdarshKhandare"
             target="_blank"
             rel="noreferrer noopener"
-            className="text-foreground transition-colors hover:text-primary"
-          >
+            className="text-foreground transition-colors hover:text-primary">
             Adarsh Khandare
           </a>{" "}
           · {year} · MIT License
         </p>
       </div>
     </footer>
-  )
+  );
 }

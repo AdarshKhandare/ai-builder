@@ -381,6 +381,8 @@ async def me(
         "username": user.username,
         "avatar_url": user.avatar_url,
         "email": user.email,
+        "lifetime_project_count": user.lifetime_project_count,
+        "project_limit": settings.PROJECT_LIMIT,
     }
 
 

@@ -37,6 +37,8 @@ const SAMPLE_SUMMARY: ProjectSummary = {
   prompt: 'A simple counter with increment and decrement',
   model: 'opencode-go/minimax-m3',
   created_at: '2026-07-03T10:00:00.000Z',
+  iteration_count: 0,
+  iteration_limit: 10,
 }
 
 const SAMPLE_FULL: ProjectFull = {

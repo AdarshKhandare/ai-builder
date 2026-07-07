@@ -17,6 +17,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.config import settings
+
 # Maximum number of characters surfaced in the list view's
 # ``prompt`` field. Implemented in the route (not the schema) so
 # the database column is still the full prompt and a
@@ -148,6 +150,10 @@ class ProjectResponse(BaseModel):
         prompt: Full original prompt.
         code: Full generated body.
         model: OpenCode Go model id.
+        iteration_count: Number of ``POST /api/iterate`` attempts
+            made against this project.
+        iteration_limit: Product cap on iterations per project
+            (from config; currently 10).
         created_at: First-write timestamp (UTC, server-set).
         updated_at: Last-write timestamp (UTC, server-set, bumped
             by the ORM's ``onupdate`` hook).
@@ -158,6 +164,8 @@ class ProjectResponse(BaseModel):
     prompt: str
     code: str
     model: str
+    iteration_count: int
+    iteration_limit: int = settings.ITERATION_LIMIT
     created_at: datetime
     updated_at: datetime
 
@@ -186,6 +194,10 @@ class ProjectListItem(BaseModel):
         title: Human-readable name.
         prompt: Truncated original prompt (see route).
         model: OpenCode Go model id.
+        iteration_count: Number of ``POST /api/iterate`` attempts
+            made against this project.
+        iteration_limit: Product cap on iterations per project
+            (from config; currently 10).
         created_at: First-write timestamp.
     """
 
@@ -193,6 +205,8 @@ class ProjectListItem(BaseModel):
     title: str
     prompt: str
     model: str
+    iteration_count: int
+    iteration_limit: int = settings.ITERATION_LIMIT
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -255,6 +269,9 @@ class IterateRequest(BaseModel):
         model: OpenCode Go model id used for the iteration
             coder call. Same pattern as
             :class:`GenerateRequest.model`.
+        project_id: The id of the project being iterated on.
+            Required so the backend can enforce the per-project
+            iteration cap and verify ownership.
     """
 
     prompt: str = Field(
@@ -275,4 +292,8 @@ class IterateRequest(BaseModel):
     model: str = Field(
         pattern=_MODEL_ID_PATTERN,
         description="OpenCode Go model identifier to use for the iteration.",
+    )
+    project_id: int = Field(
+        ge=1,
+        description="Project id being iterated on.",
     )

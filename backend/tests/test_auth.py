@@ -196,7 +196,11 @@ async def test_me_with_valid_token_returns_user(
         * Status code is ``200``
         * Response body has ``id``, ``username``, ``avatar_url``,
           ``email`` matching the fixture user
+        * Response body includes ``lifetime_project_count`` and
+          ``project_limit``
     """
+    from app.config import settings
+
     response = await auth_client.get("/api/auth/me")
     assert (
         response.status_code == 200
@@ -206,6 +210,8 @@ async def test_me_with_valid_token_returns_user(
     assert body["username"] == test_user["username"]
     assert body["avatar_url"] == "https://avatars.example/test-user"
     assert body["email"] == "test@example.com"
+    assert body["lifetime_project_count"] == 0
+    assert body["project_limit"] == settings.PROJECT_LIMIT
 
 
 async def test_me_with_expired_token_returns_401(client: AsyncClient) -> None:

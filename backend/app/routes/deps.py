@@ -321,6 +321,14 @@ DAILY_LIMITS: dict[str, int] = {
     "project_create": 2,
 }
 
+# Error message used when a user has reached the lifetime project
+# creation cap. Shared by ``/api/generate`` (blocks new generations)
+# and ``POST /api/projects`` (defense-in-depth on explicit create).
+_PROJECT_LIMIT_REACHED_DETAIL = (
+    "You've reached the 2-project limit for your account. "
+    "You can still iterate on your existing projects, but you cannot create new ones."
+)
+
 
 def _start_of_today_utc() -> datetime:
     """Return midnight (00:00:00) of today in UTC, as a naive datetime.
@@ -332,6 +340,34 @@ def _start_of_today_utc() -> datetime:
     """
     now_utc = datetime.now(timezone.utc)
     return now_utc.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+
+
+async def check_lifetime_project_limit(
+    user: Annotated[User, Depends(get_current_user)],
+) -> User:
+    """Block project-generating endpoints when the lifetime cap is reached.
+
+    The primary abuse-prevention rule is 2 projects per user for the
+    lifetime of the account. This dependency runs **before** the daily
+    UsageEvent quota check so that a capped user does not consume a
+    daily slot just to be told they cannot create projects.
+
+    Args:
+        user: The current authenticated user.
+
+    Returns:
+        The same :class:`User` row when the cap has not been reached.
+
+    Raises:
+        HTTPException: ``429`` with a user-friendly ``detail`` when
+            ``user.lifetime_project_count >= settings.PROJECT_LIMIT``.
+    """
+    if user.lifetime_project_count >= settings.PROJECT_LIMIT:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=_PROJECT_LIMIT_REACHED_DETAIL,
+        )
+    return user
 
 
 async def check_usage_quota(

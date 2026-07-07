@@ -31,11 +31,8 @@
  * animation.
  */
 import {
-  useEffect,
-  useRef,
   type ReactNode,
 } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
 import {
   Group,
   Panel,
@@ -146,40 +143,21 @@ function TwoColumnLayout({
   codePanel,
   previewPanel,
 }: TwoColumnLayoutProps) {
-  const rightPanelRef = useRef<PanelImperativeHandle | null>(null)
-  /*
-   * Track the previously-applied `showCode` value so we only call
-   * collapse/expand when the value actually changes. The ref is
-   * initialised to `null` (NOT to the current `showCode`) so the
-   * first effect run always applies the state — otherwise, when
-   * the page mounts with `showCode=false`, the guard
-   * `null === false` is false, the ref updates to `false`, and
-   * `collapse()` fires. Without the sentinel, `lastShowCodeRef`
-   * would be initialised to `false`, the guard `false === false`
-   * would early-return, and the right Panel would stay at its
-   * `defaultSize=65` with no content (AnimatePresence renders
-   * nothing) — leaving the chat squeezed to 35% of the shell.
-   */
-  const lastShowCodeRef = useRef<boolean | null>(null)
-
-  useEffect(() => {
-    if (!rightPanelRef.current) return
-    if (lastShowCodeRef.current === showCode) return
-    lastShowCodeRef.current = showCode
-    if (showCode) {
-      // Restore the right panel to its most recent size.
-      rightPanelRef.current.expand()
-    } else {
-      // Snap to `collapsedSize` (0%). The right column visually
-      // disappears and the chat fills the shell.
-      rightPanelRef.current.collapse()
-    }
-  }, [showCode])
+  if (!showCode) {
+    return <div className="h-full w-full bg-background">{chatPanel}</div>
+  }
 
   return (
     <Group
+      id="builder-panel-group"
       orientation="horizontal"
       className="h-full w-full"
+      defaultLayout={{
+        "0": defaults.chat,
+        "1": defaults.right,
+        chat: defaults.chat,
+        right: defaults.right
+      }}
       // Generous hit target on the drag handle for both mouse and touch.
       resizeTargetMinimumSize={SEPARATOR_HIT_TARGET}
     >
@@ -187,7 +165,6 @@ function TwoColumnLayout({
         id="chat"
         defaultSize={defaults.chat}
         minSize={defaults.chatMin}
-        maxSize={defaults.chatMax}
         className="h-full min-w-0"
       >
         {chatPanel}
@@ -204,54 +181,22 @@ function TwoColumnLayout({
           'data-[separator=focus]:bg-primary',
           'data-[separator=focus]:outline data-[separator=focus]:outline-2',
           'data-[separator=focus]:outline-ring',
-          // Hide the drag handle when the right panel is collapsed —
-          // there's nothing to drag and a visible handle on a 0-width
-          // column is confusing.
-          !showCode && 'pointer-events-none opacity-0',
         )}
       />
 
       <Panel
         id="right"
-        panelRef={rightPanelRef}
         defaultSize={defaults.right}
         minSize={defaults.rightMin}
-        // `collapsible + collapsedSize=0` lets the imperative API
-        // collapse the panel all the way down. The Group respects
-        // the collapsed size and the chat panel fills the freed
-        // space automatically.
-        collapsible
-        collapsedSize={0}
         className="h-full min-w-0"
       >
-        {/*
-         * The right column is always rendered (the Panel itself is
-         * always mounted), but its CONTENT is conditionally swapped
-         * via framer-motion's `AnimatePresence` so the appearance is
-         * a smooth fade-in rather than a hard pop. The Panel
-         * element stays in the DOM, which preserves the user's
-         * resize state.
-         */}
-        <AnimatePresence initial={false}>
-          {showCode ? (
-            <motion.div
-              key="right-content"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="h-full w-full"
-            >
-              <CodePreviewTabs
-                activeTab={activeTab}
-                onTabChange={onActiveTabChange}
-                showPreview={showPreview}
-                codePanel={codePanel}
-                previewPanel={previewPanel}
-              />
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
+        <CodePreviewTabs
+          activeTab={activeTab}
+          onTabChange={onActiveTabChange}
+          showPreview={showPreview}
+          codePanel={codePanel}
+          previewPanel={previewPanel}
+        />
       </Panel>
     </Group>
   )

@@ -47,6 +47,8 @@ const SAMPLE_USER: User = {
   username: 'octocat',
   avatar_url: null,
   email: null,
+  lifetime_project_count: 0,
+  project_limit: 2,
 }
 
 function authState(overrides: Partial<UseAuthResult>): UseAuthResult {

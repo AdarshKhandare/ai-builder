@@ -49,6 +49,8 @@ const SAMPLE_USER: User = {
   username: 'octocat',
   avatar_url: 'https://github.com/images/octocat.png',
   email: 'octocat@github.com',
+  lifetime_project_count: 0,
+  project_limit: 2,
 }
 
 /* ------------------------------------------------------------------ */

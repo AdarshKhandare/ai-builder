@@ -116,9 +116,9 @@
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
   --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.15), 0 8px 10px -6px rgb(0 0 0 / 0.15);
 
-  /* ─── Glow shadows (indigo primary accent glow for buttons) ─── */
-  --shadow-glow: 0 0 20px oklch(0.488 0.207 264.377 / 0.15);
-  --shadow-glow-lg: 0 0 40px oklch(0.488 0.207 264.377 / 0.2);
+  /* ─── Glow shadows (blue primary accent glow for buttons) ─── */
+  --shadow-glow: 0 0 20px oklch(0.65 0.155 250 / 0.15);
+  --shadow-glow-lg: 0 0 40px oklch(0.65 0.155 250 / 0.2);
 
   /* ─── Custom animations ─── */
   --animate-shimmer: shimmer 2s ease-in-out infinite;
@@ -155,8 +155,8 @@
     50% { opacity: 1; }
   }
   @keyframes glow-pulse {
-    0%, 100% { box-shadow: 0 0 15px oklch(0.488 0.207 264.377 / 0.1); }
-    50% { box-shadow: 0 0 30px oklch(0.488 0.207 264.377 / 0.2); }
+    0%, 100% { box-shadow: 0 0 15px oklch(0.65 0.155 250 / 0.1); }
+    50% { box-shadow: 0 0 30px oklch(0.65 0.155 250 / 0.2); }
   }
   @keyframes gradient-shift {
     0%, 100% { background-position: 0% 50%; }
@@ -179,65 +179,65 @@
 :root {
   --radius: 0.5rem;
 
-  /* Core surfaces — light, near-white */
-  --background: oklch(0.995 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(0.99 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
+  /* Core surfaces — dark, charcoal */
+  --background: oklch(0.14 0.006 250);
+  --foreground: oklch(0.93 0.006 250);
+  --card: oklch(0.18 0.008 250);
+  --card-foreground: oklch(0.93 0.006 250);
+  --popover: oklch(0.21 0.01 250);
+  --popover-foreground: oklch(0.93 0.006 250);
 
-  /* Primary — indigo. Confident, modern, WCAG AA on white. */
-  --primary: oklch(0.488 0.207 264.377);
-  --primary-foreground: oklch(0.985 0 0);
+  /* Primary — refined blue. Confident, modern, WCAG AA. */
+  --primary: oklch(0.65 0.155 250);
+  --primary-foreground: oklch(0.98 0 0);
 
-  /* Secondary — light gray surface for chips, badges */
-  --secondary: oklch(0.96 0 0);
-  --secondary-foreground: oklch(0.218 0 0);
+  /* Secondary — elevated charcoal button/chip surface */
+  --secondary: oklch(0.22 0.012 250);
+  --secondary-foreground: oklch(0.85 0.008 250);
 
   /* Muted — subtle backgrounds and secondary text */
-  --muted: oklch(0.965 0 0);
-  --muted-foreground: oklch(0.45 0 0);
+  --muted: oklch(0.22 0.01 250);
+  --muted-foreground: oklch(0.58 0.015 250);
 
-  /* Accent — very light indigo tint for hover/active surfaces */
-  --accent: oklch(0.94 0.02 264);
-  --accent-foreground: oklch(0.218 0 0);
+  /* Accent — elevated hover state */
+  --accent: oklch(0.25 0.02 250);
+  --accent-foreground: oklch(0.90 0.015 250);
 
   /* Destructive — red */
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.62 0.22 25);
+  --destructive-foreground: oklch(0.98 0 0);
 
-  /* Borders — light gray */
-  --border: oklch(0.91 0 0);
-  --input: oklch(0.91 0 0);
-  --ring: oklch(0.488 0.207 264.377);
+  /* Borders — dark border */
+  --border: oklch(0.28 0.014 250);
+  --input: oklch(0.25 0.012 250);
+  --ring: oklch(0.65 0.155 250 / 0.4);
 
   /* Extended — Forge-specific */
-  --success: oklch(0.627 0.194 149.214);
-  --warning: oklch(0.795 0.184 86.047);
-  --info: oklch(0.623 0.214 259.822);
-  --background-sunken: oklch(0.975 0 0);
-  --border-subtle: oklch(0.935 0 0);
-  --primary-glow: oklch(0.488 0.207 264.377 / 0.1);
+  --success: oklch(0.65 0.17 155);
+  --warning: oklch(0.78 0.16 84);
+  --info: oklch(0.65 0.15 250);
+  --background-sunken: oklch(0.11 0.006 250);
+  --border-subtle: oklch(0.21 0.01 250);
+  --primary-glow: oklch(0.65 0.155 250 / 0.15);
 
   /* Chart palette */
-  --chart-1: oklch(0.488 0.207 264.377);
-  --chart-2: oklch(0.627 0.194 149.214);
-  --chart-3: oklch(0.623 0.214 259.822);
-  --chart-4: oklch(0.577 0.245 27.325);
-  --chart-5: oklch(0.6 0.2 310);
+  --chart-1: oklch(0.65 0.155 250);
+  --chart-2: oklch(0.65 0.17 155);
+  --chart-3: oklch(0.65 0.15 250);
+  --chart-4: oklch(0.62 0.22 25);
+  --chart-5: oklch(0.65 0.15 310);
 
   /* Sidebar */
-  --sidebar: oklch(0.99 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.488 0.207 264.377);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.94 0.02 264);
-  --sidebar-accent-foreground: oklch(0.218 0 0);
-  --sidebar-border: oklch(0.91 0 0);
-  --sidebar-ring: oklch(0.488 0.207 264.377);
+  --sidebar: oklch(0.18 0.008 250);
+  --sidebar-foreground: oklch(0.93 0.006 250);
+  --sidebar-primary: oklch(0.65 0.155 250);
+  --sidebar-primary-foreground: oklch(0.98 0 0);
+  --sidebar-accent: oklch(0.25 0.02 250);
+  --sidebar-accent-foreground: oklch(0.90 0.015 250);
+  --sidebar-border: oklch(0.28 0.014 250);
+  --sidebar-ring: oklch(0.65 0.155 250 / 0.4);
 
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 /* ---------------------------------------------------------------------------
@@ -408,7 +408,7 @@
 
 [data-group] > [data-separator][data-separator='active'] {
   background-color: var(--primary);
-  box-shadow: 0 0 8px oklch(0.488 0.207 264.377 / 0.3);
+  box-shadow: 0 0 8px oklch(0.65 0.155 250 / 0.3);
 }
 
 [data-group] > [data-separator][data-separator='focus'] {

@@ -46,6 +46,11 @@ export interface UseAuthResult {
    * "no session" answer — `user` is `null` and `error` stays
    * `null`. Only true errors (network failures, 5xx, malformed
    * JSON) populate `error`.
+   *
+   * The `User` payload also carries abuse-prevention counters
+   * (`lifetime_project_count`, `project_limit`) that the
+   * Builder uses to disable the "Generate" button when the
+   * user is at the project cap.
    */
   user: User | null
   /** True while the initial `GET /api/auth/me` is in flight. */
@@ -84,10 +89,6 @@ export interface UseAuthResult {
 /* Hook                                                                */
 /* ------------------------------------------------------------------ */
 
-/**
- * Track the currently-authenticated user. See the file-level
- * docstring for the full behaviour contract.
- */
 export function useAuth(): UseAuthResult {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState<boolean>(true)

@@ -64,16 +64,21 @@ def _project_create_body(**overrides: Any) -> dict[str, Any]:
 async def test_project_create_quota_blocks_after_cap(
     auth_client: AsyncClient, test_user: dict
 ) -> None:
-    """A user can create ``DAILY_LIMITS['project_create']`` projects, then 429.
+    """A user can create ``PROJECT_LIMIT`` projects, then 429.
+
+    The lifetime project cap (default 2) is now the primary gate and
+    matches the legacy daily ``project_create`` cap. The third create
+    is rejected with the user-friendly lifetime-limit message before
+    the daily UsageEvent quota is consulted.
 
     Asserts:
         * The first N creates return 201
         * The (N+1)th create returns 429
-        * The 429 detail includes ``error == "quota_exceeded"``,
-          the configured ``limit``, the current ``used`` count,
-          and a positive ``retry_after_seconds``
+        * The 429 ``detail`` is the lifetime-limit string
     """
-    cap = DAILY_LIMITS["project_create"]
+    from app.config import settings
+
+    cap = settings.PROJECT_LIMIT
 
     # ``cap`` successful creates.
     for i in range(cap):
@@ -86,7 +91,7 @@ async def test_project_create_quota_blocks_after_cap(
             f"{response.status_code}: {response.text}"
         )
 
-    # The next create is over the cap.
+    # The next create is over the lifetime cap.
     response = await auth_client.post(
         "/api/projects", json=_project_create_body(title="Over the cap")
     )
@@ -94,12 +99,8 @@ async def test_project_create_quota_blocks_after_cap(
         f"Expected 429 over the cap, got " f"{response.status_code}: {response.text}"
     )
     detail = response.json().get("detail")
-    assert isinstance(detail, dict), f"Expected dict detail, got {detail!r}"
-    assert detail["error"] == "quota_exceeded"
-    assert detail["endpoint"] == "project_create"
-    assert detail["limit"] == cap
-    assert detail["used"] == cap
-    assert detail["retry_after_seconds"] > 0
+    assert isinstance(detail, str), f"Expected string detail, got {detail!r}"
+    assert "2-project limit" in detail
 
 
 async def test_project_create_quota_counts_failed_creates(
@@ -175,13 +176,18 @@ async def test_project_create_quota_counts_failed_creates(
             f"{response.status_code}: {response.text}"
         )
 
-    # The next create is over the cap and returns 429.
+    # The next create is over a cap and returns 429. Because the
+    # failed create above consumed a daily slot, the daily quota
+    # gate fires before the lifetime cap in this exact sequence.
     response = await auth_client.post(
         "/api/projects", json=_project_create_body(title="Over the cap")
     )
     assert response.status_code == 429, (
         f"Expected 429 over the cap, got " f"{response.status_code}: {response.text}"
     )
+    detail = response.json().get("detail")
+    assert isinstance(detail, dict)
+    assert detail["error"] == "quota_exceeded"
 
 
 async def test_project_create_quota_is_per_user(
@@ -452,11 +458,29 @@ async def test_iterate_quota_blocks_after_cap(
           ``error='quota_exceeded'`` and the correct limit/used
         * The count after the 429 is still ``cap``
     """
+    from app.config import settings
     from app.routes import iterate as iterate_module
 
     monkeypatch.setattr(
         iterate_module, "OpenCodeClient", _MockOpenCodeFactory(mock_client)
     )
+
+    # Raise the per-project iteration cap so the daily cap is the
+    # gate that fires first in this test.
+    monkeypatch.setattr(settings, "ITERATION_LIMIT", 100)
+
+    # Create a project to iterate on.
+    create_response = await auth_client.post(
+        "/api/projects",
+        json={
+            "title": "Iterate Quota Test",
+            "prompt": "A test project",
+            "code": "<html><body>v0</body></html>",
+            "model": "opencode-go/minimax-m3",
+        },
+    )
+    assert create_response.status_code == 201
+    project_id = create_response.json()["id"]
 
     cap = DAILY_LIMITS["iterate"]
 
@@ -467,6 +491,7 @@ async def test_iterate_quota_blocks_after_cap(
                 "prompt": f"change {i}",
                 "current_code": f"<html>v{i}</html>",
                 "model": "opencode-go/minimax-m3",
+                "project_id": project_id,
             },
         )
         assert response.status_code == 200, (
@@ -487,6 +512,7 @@ async def test_iterate_quota_blocks_after_cap(
             "prompt": "over the cap",
             "current_code": "<html>x</html>",
             "model": "opencode-go/minimax-m3",
+            "project_id": project_id,
         },
     )
     assert over_response.status_code == 429, (

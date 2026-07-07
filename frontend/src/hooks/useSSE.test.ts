@@ -18,6 +18,35 @@ import {
 } from '@/test-utils/sse'
 import type { SSEEvent } from '@/lib/api'
 
+/** Build a 429 `Response` with the abuse-prevention detail body. */
+function mockProjectCapResponse(): Response {
+  return new Response(
+    JSON.stringify({
+      detail:
+        "You've reached the 2-project limit for your account. You can still iterate on your existing projects, but you cannot create new ones.",
+    }),
+    {
+      status: 429,
+      statusText: 'Too Many Requests',
+      headers: { 'Content-Type': 'application/json' },
+    },
+  )
+}
+
+/** Build a 429 `Response` with the per-project iteration-cap detail. */
+function mockIterationCapResponse(): Response {
+  return new Response(
+    JSON.stringify({
+      detail: "You've reached the 10-iteration limit for this project.",
+    }),
+    {
+      status: 429,
+      statusText: 'Too Many Requests',
+      headers: { 'Content-Type': 'application/json' },
+    },
+  )
+}
+
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
@@ -401,6 +430,7 @@ describe('useSSE() — iterate() lifecycle', () => {
         prompt: 'make the hero blue',
         currentCode: '<h1>red</h1>',
         history: [],
+        projectId: 1,
       })
     })
 
@@ -441,6 +471,7 @@ describe('useSSE() — iterate() lifecycle', () => {
         prompt: 'make hero blue',
         currentCode: '<h1>red</h1>',
         history: [],
+        projectId: 1,
       })
     })
 
@@ -461,6 +492,7 @@ describe('useSSE() — iterate() lifecycle', () => {
         prompt: 'tweak',
         currentCode: '<h1>x</h1>',
         history: [],
+        projectId: 1,
       })
     })
 
@@ -488,6 +520,7 @@ describe('useSSE() — iterate() lifecycle', () => {
         prompt: 'tweak',
         currentCode: '<h1>x</h1>',
         history: [],
+        projectId: 1,
       })
     })
 
@@ -510,6 +543,7 @@ describe('useSSE() — iterate() lifecycle', () => {
         prompt: 'tweak',
         currentCode: '<h1>x</h1>',
         history: [],
+        projectId: 1,
       })
     })
 
@@ -539,6 +573,7 @@ describe('useSSE() — iterate() lifecycle', () => {
         prompt: 'make it blue',
         currentCode: '<h1>red</h1>',
         history,
+        projectId: 1,
         model: 'opencode-go/kimi-k2.6',
       })
     })
@@ -552,6 +587,7 @@ describe('useSSE() — iterate() lifecycle', () => {
       prompt: 'make it blue',
       current_code: '<h1>red</h1>',
       history,
+      project_id: 1,
       model: 'opencode-go/kimi-k2.6',
     })
   })
@@ -581,6 +617,7 @@ describe('useSSE() — iterate() lifecycle', () => {
         prompt: 'first',
         currentCode: '<h1>x</h1>',
         history: [],
+        projectId: 1,
       })
     })
 
@@ -592,6 +629,7 @@ describe('useSSE() — iterate() lifecycle', () => {
         prompt: 'second',
         currentCode: '<h1>x</h1>',
         history: [],
+        projectId: 1,
       })
     })
 
@@ -601,5 +639,60 @@ describe('useSSE() — iterate() lifecycle', () => {
     hanging1.close()
     hanging2.close()
     await flush()
+  })
+})
+
+/* ------------------------------------------------------------------ */
+/* 429 error handling                                                  */
+/*                                                                     */
+/* The backend returns a plain HTTP 429 (NOT SSE) with a JSON body     */
+/* of the form `{ "detail": "..." }` when the user is at the project   */
+/* cap (on `start`) or the per-project iteration cap (on `iterate`).  */
+/* The async generator must read the detail and surface it verbatim   */
+/* so the hook layer can promote it straight to the user-visible       */
+/* `error` state. The `useSSE` hook's own try/catch then puts it in    */
+/* `result.current.error`.                                            */
+/* ------------------------------------------------------------------ */
+
+describe('useSSE() — 429 error handling (abuse prevention)', () => {
+  it('test_start_sets_error_to_detail_on_project_cap — 429 detail is the error string', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockProjectCapResponse()))
+
+    const { result } = renderHook(() => useSSE())
+
+    await act(async () => {
+      await result.current.start('build me an app')
+    })
+
+    expect(result.current.error).toBe(
+      "You've reached the 2-project limit for your account. You can still iterate on your existing projects, but you cannot create new ones.",
+    )
+    expect(result.current.isStreaming).toBe(false)
+    // No code was produced — the 429 came BEFORE any SSE body.
+    expect(result.current.code).toBe('')
+    expect(result.current.done).toBe(false)
+  })
+
+  it('test_iterate_sets_error_to_detail_on_iteration_cap — 429 detail is the error string', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockIterationCapResponse()))
+
+    const { result } = renderHook(() => useSSE())
+
+    await act(async () => {
+      await result.current.iterate({
+        prompt: 'tweak the hero',
+        currentCode: '<h1>red</h1>',
+        history: [],
+        projectId: 1,
+      })
+    })
+
+    expect(result.current.error).toBe(
+      "You've reached the 10-iteration limit for this project.",
+    )
+    expect(result.current.isStreaming).toBe(false)
+    // No code was produced — the 429 came BEFORE any SSE body.
+    expect(result.current.code).toBe('')
+    expect(result.current.done).toBe(false)
   })
 })

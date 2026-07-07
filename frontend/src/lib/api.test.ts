@@ -285,6 +285,41 @@ describe('generateStream()', () => {
     // catches and the caller's signal is what aborted it.
     await expect(iteration).resolves.toEqual([])
   })
+
+  it('test_generateStream_surfaces_429_detail — abuse-prevention cap throws with the detail message', async () => {
+    // The backend returns a plain HTTP 429 (NOT SSE) with a
+    // `{ "detail": "..." }` body when the user is at the project
+    // cap. The async generator must NOT attempt to read the body
+    // as SSE — instead it must read the JSON detail and surface
+    // it verbatim in the thrown `Error.message`.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            detail:
+              "You've reached the 2-project limit for your account. You can still iterate on your existing projects, but you cannot create new ones.",
+          }),
+          {
+            status: 429,
+            statusText: 'Too Many Requests',
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
+      ),
+    )
+
+    const gen = generateStream('x')
+    await expect(
+      (async () => {
+        for await (const _ of gen) {
+          /* drain */
+        }
+      })(),
+    ).rejects.toThrow(
+      /2-project limit for your account[\s\S]*still iterate on your existing projects/,
+    )
+  })
 })
 
 /* ------------------------------------------------------------------ */
@@ -310,13 +345,14 @@ describe('iterateStream()', () => {
         { role: 'user', content: 'build a hero' },
         { role: 'assistant', content: '<h1>red</h1>' },
       ],
+      1,
     )) {
       collected.push(event)
     }
 
     expect(collected).toEqual(events)
     // POST to /api/iterate with the right shape: prompt,
-    // current_code, history, and (optional) model.
+    // current_code, history, project_id, and (optional) model.
     expect(fetchMock).toHaveBeenCalledWith('/api/iterate', {
       method: 'POST',
       credentials: 'include',
@@ -331,6 +367,7 @@ describe('iterateStream()', () => {
           { role: 'user', content: 'build a hero' },
           { role: 'assistant', content: '<h1>red</h1>' },
         ],
+        project_id: 1,
       }),
       signal: undefined,
     })
@@ -349,6 +386,7 @@ describe('iterateStream()', () => {
       'tweak it',
       '<h1>x</h1>',
       history,
+      1,
       'opencode-go/kimi-k2.6',
     )) {
       collected.push(event)
@@ -360,12 +398,14 @@ describe('iterateStream()', () => {
       prompt: string
       current_code: string
       history: ChatMessage[]
+      project_id: number
       model?: string
     }
     expect(body).toEqual({
       prompt: 'tweak it',
       current_code: '<h1>x</h1>',
       history: [{ role: 'user', content: 'build a hero' }],
+      project_id: 1,
       model: 'opencode-go/kimi-k2.6',
     })
   })
@@ -400,7 +440,7 @@ describe('iterateStream()', () => {
     )
 
     const collected: SSEEvent[] = []
-    for await (const event of iterateStream('x', '', [])) {
+    for await (const event of iterateStream('x', '', [], 1)) {
       collected.push(event)
     }
 
@@ -416,7 +456,7 @@ describe('iterateStream()', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     const controller = new AbortController()
-    const generator = iterateStream('x', '', [], undefined, controller.signal)
+    const generator = iterateStream('x', '', [], 1, undefined, controller.signal)
 
     const iteration = (async () => {
       const events: SSEEvent[] = []
@@ -439,17 +479,21 @@ describe('iterateStream()', () => {
     await expect(iteration).resolves.toEqual([])
   })
 
-  it('test_iterateStream_throws_on_error_response — non-2xx surfaces as an Error', async () => {
+  it('test_iterateStream_throws_on_error_response — non-2xx surfaces as an Error with the detail body', async () => {
+    // The backend returns `{ "detail": "..." }` JSON for non-2xx
+    // responses (e.g. 429 iteration cap). The async generator must
+    // read the detail and surface it verbatim so the hook layer
+    // can promote it to the user-visible error state.
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockErrorResponse(500, 'Internal Server Error')))
 
-    const gen = iterateStream('x', '', [])
+    const gen = iterateStream('x', '', [], 1)
     await expect(
       (async () => {
         for await (const _ of gen) {
           /* drain */
         }
       })(),
-    ).rejects.toThrow(/Iterate failed: 500/)
+    ).rejects.toThrow(/Internal Server Error/)
   })
 
   it('test_iterateStream_emits_error_event — backend error frame is yielded', async () => {
@@ -462,7 +506,7 @@ describe('iterateStream()', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     const collected: SSEEvent[] = []
-    for await (const event of iterateStream('x', '', [])) {
+    for await (const event of iterateStream('x', '', [], 1)) {
       collected.push(event)
     }
 
@@ -471,6 +515,37 @@ describe('iterateStream()', () => {
     expect(collected).toEqual(events)
     const errorEvent = collected.find((e) => e.type === 'error')
     expect(errorEvent).toEqual({ type: 'error', message: 'model rate limited' })
+  })
+
+  it('test_iterateStream_surfaces_429_detail — iteration cap throws with the detail message', async () => {
+    // Mirror of the generateStream 429 test, but for the
+    // per-project iteration cap. The generator must NOT attempt
+    // to read the body as SSE — it must surface the JSON detail
+    // verbatim in the thrown `Error.message`.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            detail: "You've reached the 10-iteration limit for this project.",
+          }),
+          {
+            status: 429,
+            statusText: 'Too Many Requests',
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
+      ),
+    )
+
+    const gen = iterateStream('x', '', [], 1)
+    await expect(
+      (async () => {
+        for await (const _ of gen) {
+          /* drain */
+        }
+      })(),
+    ).rejects.toThrow(/10-iteration limit for this project/)
   })
 })
 

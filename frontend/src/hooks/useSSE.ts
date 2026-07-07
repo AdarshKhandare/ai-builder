@@ -40,6 +40,14 @@ export interface IterateParams {
   currentCode: string
   /** Conversation history (excluding the current `prompt`). */
   history: ChatMessage[]
+  /**
+   * ID of the project this iteration belongs to. REQUIRED — the
+   * backend uses it to enforce the per-project iteration cap and to
+   * persist the updated code. The Builder pulls this from
+   * `currentProjectId` and refuses to send without it (it would
+   * be a misuse to iterate without an open project).
+   */
+  projectId: number
   /** Optional model ID override. */
   model?: string
 }
@@ -69,6 +77,13 @@ export interface UseSSEResult {
   /**
    * Start a new generation. Any in-flight request is aborted
    * first. Resolves when the stream ends (success or failure).
+   *
+   * Non-2xx responses (notably HTTP 429 when the user is at
+   * their project cap) are surfaced as an `Error` whose
+   * `message` is the backend's `detail` string. The hook
+   * catches that error and stores it in `error`, so the
+   * Builder's toast and the `ChatPanel`'s limit message both
+   * see the actionable copy verbatim.
    */
   start: (prompt: string, model?: string) => Promise<void>
   /**
@@ -168,6 +183,10 @@ export function useSSE(): UseSSEResult {
       } catch (err) {
         // AbortError is expected when we cancel — don't surface it.
         if (controller.signal.aborted) return
+        // The async generator throws with the backend's `detail`
+        // message for non-2xx responses (e.g. 429 project cap),
+        // so surfacing `err.message` puts the actionable copy
+        // straight into the error state for the Builder's toast.
         const message = err instanceof Error ? err.message : 'Unknown error'
         setError(message)
       } finally {
@@ -193,6 +212,7 @@ export function useSSE(): UseSSEResult {
       prompt,
       currentCode,
       history,
+      projectId,
       model,
     }: IterateParams): Promise<void> => {
       // Cancel any previous in-flight request before starting a new one.
@@ -216,6 +236,7 @@ export function useSSE(): UseSSEResult {
           prompt,
           currentCode,
           history,
+          projectId,
           model,
           controller.signal,
         )) {
@@ -225,6 +246,10 @@ export function useSSE(): UseSSEResult {
       } catch (err) {
         // AbortError is expected when we cancel — don't surface it.
         if (controller.signal.aborted) return
+        // The async generator throws with the backend's `detail`
+        // message for non-2xx responses (e.g. 429 iteration cap),
+        // so surfacing `err.message` puts the actionable copy
+        // straight into the error state for the Builder's toast.
         const message = err instanceof Error ? err.message : 'Unknown error'
         setError(message)
       } finally {

@@ -45,9 +45,10 @@ import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models.database import Project, get_db
 from app.models.schemas import (
     LIST_PROMPT_TRUNCATE,
@@ -59,6 +60,7 @@ from app.models.schemas import (
 from app.routes.deps import (
     DAILY_LIMITS,
     User,
+    check_lifetime_project_limit,
     check_usage_quota,
     get_current_user,
 )
@@ -78,17 +80,17 @@ from app.routes.deps import (
 # original signature through it, so the explicit wrapper is
 # what works.
 async def _project_create_quota(
-    user: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(check_lifetime_project_limit)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> tuple[User, AsyncSession]:
-    """FastAPI dependency enforcing the project-create daily cap.
+    """FastAPI dependency enforcing the lifetime + daily project-create caps.
 
     Returns:
         The ``(user, db)`` tuple from
         :func:`app.routes.deps.check_usage_quota`; the route
-        uses the same ``db`` session to insert the new row so
-        the quota event and the project are committed in a
-        single transaction.
+        uses the same ``db`` session to insert the new row. The
+        ``user.lifetime_project_count`` counter is incremented
+        atomically by the route handler itself.
     """
     return await check_usage_quota(
         endpoint="project_create",
@@ -242,6 +244,7 @@ async def list_projects(
                     "title": project.title,
                     "prompt": _truncate_prompt(project.prompt),
                     "model": project.model,
+                    "iteration_count": project.iteration_count,
                     "created_at": project.created_at,
                 }
             )
@@ -305,10 +308,11 @@ async def create_project(
 
     The quota dependency
     (:func:`app.routes.deps.check_usage_quota`) enforces the
-    per-user daily cap on project creation (default: 2). The
-    dependency returns the same ``(user, db)`` tuple the route
-    uses for the actual insert so the quota event and the new
-    row are committed in a single transaction.
+    per-user daily cap on project creation (default: 2) and the
+    lifetime cap pre-check. The route then performs an atomic
+    SQL UPDATE that both checks and increments
+    ``user.lifetime_project_count`` so concurrent creates cannot
+    race past the lifetime limit.
 
     The ``title`` default of ``"Untitled"`` is applied at the
     column level (``mapped_column(default="Untitled")``); the
@@ -331,9 +335,33 @@ async def create_project(
     Raises:
         HTTPException: ``401`` from ``get_current_user`` if
             the caller is not authenticated; ``429`` from
-            ``check_usage_quota`` if the daily cap is reached.
+            ``check_usage_quota`` if the daily cap is reached;
+            ``429`` from the atomic lifetime-cap UPDATE if the
+            lifetime cap has been reached (defense-in-depth for
+            concurrent requests).
     """
     user, db = quota
+
+    # Atomic check-and-increment for the lifetime project cap. This
+    # UPDATE is the authoritative guard: SQLite serializes concurrent
+    # writers, so two simultaneous requests cannot both read the old
+    # count and write the same new value. ``rowcount == 0`` means the
+    # WHERE clause did not match (the cap was already reached).
+    result = await db.execute(
+        text(
+            "UPDATE users SET lifetime_project_count = lifetime_project_count + 1 "
+            "WHERE id = :uid AND lifetime_project_count < :limit"
+        ),
+        {"uid": user.id, "limit": settings.PROJECT_LIMIT},
+    )
+    if result.rowcount == 0:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="You've reached the 2-project limit for your account. "
+            "You can still iterate on your existing projects, but you cannot create new ones.",
+        )
+    await db.commit()
+
     project = Project(
         title=payload.title,
         prompt=payload.prompt,

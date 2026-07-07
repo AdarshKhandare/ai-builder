@@ -203,11 +203,12 @@ async def test_list_projects_pagination(
     cases: ``offset`` past the end returns an empty list, and
     ``limit=0`` is rejected at the schema layer.
 
-    The default project-create daily cap is 2 (per
-    :data:`app.routes.deps.DAILY_LIMITS`); this test patches
-    the cap to 100 so it can exercise the pagination shape
-    without tripping the quota gate. The quota gate itself
-    has its own dedicated test in :mod:`tests.test_rate_limit`.
+    The default project-create lifetime cap is 2 (per
+    :attr:`app.config.Settings.PROJECT_LIMIT`) and the daily cap
+    matches it; this test patches the lifetime cap to 100 so it
+    can exercise the pagination shape without tripping the quota
+    gate. The quota gate itself has its own dedicated test in
+    :mod:`tests.test_rate_limit`.
 
     Asserts:
         * ``limit=2&offset=1`` returns exactly 2 items: projects
@@ -217,9 +218,11 @@ async def test_list_projects_pagination(
         * ``limit=0`` is rejected with ``422`` (the Query has
           ``ge=1``).
     """
-    from app.routes import projects as projects_module
+    from app.config import settings
     from app.routes import deps as deps_module
+    from app.routes import projects as projects_module
 
+    monkeypatch.setattr(settings, "PROJECT_LIMIT", 100)
     monkeypatch.setitem(projects_module.DAILY_LIMITS, "project_create", 100)
     monkeypatch.setitem(deps_module.DAILY_LIMITS, "project_create", 100)
     created_prompts: list[str] = []

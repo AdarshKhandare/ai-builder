@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections.abc import AsyncGenerator
 from typing import Annotated, Any
 
@@ -38,9 +39,10 @@ from app.models.database import get_db
 from app.routes.deps import (
     DAILY_LIMITS,
     User,
+    check_lifetime_project_limit,
     check_usage_quota,
-    get_current_user,
 )
+from app.services.code_sanitizer import StreamingFenceStripper
 from app.services.opencode_client import OpenCodeAPIError, OpenCodeClient
 
 logger = logging.getLogger(__name__)
@@ -53,10 +55,51 @@ router = APIRouter()
 # returns a longer string.
 _MAX_TITLE_LENGTH = 100
 
+# Maximum length of a prompt-derived title. Kept shorter than the planner-
+# extracted cap because derived titles may include more words.
+_MAX_DERIVED_TITLE_LENGTH = 60
+
 # Fallback title used when the planner's response does not start with the
-# expected ``Title: <title>`` line. The frontend (TopBar) treats this as
-# the "no title yet" state.
+# expected ``Title: <title>`` line and the prompt is empty/unusable.
 _DEFAULT_TITLE = "Untitled"
+
+# Matches a title directive anywhere in the planner output. Tolerant of:
+# leading whitespace, markdown "# " prefix, "title:" (lowercase), no space
+# before the colon, and optional surrounding quotes. Uses ``[ \t]*``
+# instead of ``\s*`` after the colon so a trailing newline cannot be
+# swallowed and the title is confined to a single line.
+_TITLE_LINE_RE = re.compile(
+    r"^[ \t]*(?:#\s*)?title\s*:[ \t]*([^\n]*?)[ \t]*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+# Words stripped when deriving a title from the user's prompt.
+_FILLER_WORDS = frozenset(
+    {
+        "a",
+        "an",
+        "app",
+        "application",
+        "build",
+        "create",
+        "design",
+        "develop",
+        "for",
+        "generate",
+        "in",
+        "make",
+        "me",
+        "of",
+        "on",
+        "that",
+        "the",
+        "to",
+        "web",
+        "website",
+        "which",
+        "with",
+    }
+)
 
 
 class GenerateRequest(BaseModel):
@@ -100,10 +143,10 @@ def _sse(payload: dict[str, Any]) -> str:
 # signature through a ``partial`` object, so the explicit
 # wrapper is the working form.
 async def _generate_quota(
-    user: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(check_lifetime_project_limit)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> tuple[User, AsyncSession]:
-    """Enforce the per-user generation daily cap."""
+    """Enforce the lifetime project cap, then the daily generation cap."""
     return await check_usage_quota(
         endpoint="generate",
         daily_limit=DAILY_LIMITS["generate"],
@@ -112,50 +155,95 @@ async def _generate_quota(
     )
 
 
-def _extract_title(plan: str) -> tuple[str, str]:
-    """Extract the project title from the first line of ``plan``.
+def _derive_title_from_prompt(prompt: str) -> str:
+    """Derive a readable project title from the user's prompt.
+
+    Used as a fallback when the planner does not emit a ``Title:`` line.
+    Strips common filler words, title-cases the remainder, and caps the
+    length so the TopBar renders a sensible name instead of ``Untitled``.
+
+    Args:
+        prompt: The user's natural-language app description.
+
+    Returns:
+        A title-cased string of up to :data:`_MAX_DERIVED_TITLE_LENGTH`
+        characters, or ``_DEFAULT_TITLE`` when the prompt is empty or
+        yields no usable words.
+    """
+    if not prompt or not prompt.strip():
+        return _DEFAULT_TITLE
+
+    words = prompt.strip().split()
+    cleaned = [w.strip(".,!?;:-\"'()[]{}") for w in words]
+    meaningful = [w for w in cleaned if w.lower() not in _FILLER_WORDS]
+
+    # Use the first 4-6 meaningful words; if the prompt is entirely
+    # filler fall back to the first few raw words so we never return
+    # an empty title for a non-empty prompt.
+    if meaningful:
+        selected = meaningful[:6]
+    else:
+        selected = cleaned[:4] or cleaned
+
+    if not selected:
+        return _DEFAULT_TITLE
+
+    title = " ".join(selected).title()
+    if len(title) > _MAX_DERIVED_TITLE_LENGTH:
+        # Trim to the last complete word that fits under the cap.
+        title = title[:_MAX_DERIVED_TITLE_LENGTH].rsplit(" ", 1)[0].strip()
+    return title or _DEFAULT_TITLE
+
+
+def _extract_title(plan: str, prompt: str = "") -> tuple[str, str]:
+    """Extract the project title from the planner output.
 
     The planner is instructed to start its response with
     ``"Title: <title>"`` on line 1, followed by the rest of the build
-    plan on subsequent lines. This function parses that format and
-    returns the title and plan body separately so the route can emit
-    the title as its own SSE event and pass only the plan body to the
-    coder.
+    plan on subsequent lines. This function parses that format (and a
+    number of common variations) and returns the title and plan body
+    separately so the route can emit the title as its own SSE event and
+    pass only the plan body to the coder.
 
     Behaviour:
 
-    * If the first non-empty line starts with ``"Title:"`` (case
-      insensitive), everything after that prefix is taken as the title.
-      Surrounding whitespace and a single layer of matching quote
-      characters is stripped, and the result is capped at
-      :data:`_MAX_TITLE_LENGTH` characters.
-    * If the prefix is missing or the title is empty, ``_DEFAULT_TITLE``
-      (``"Untitled"``) is returned. The full plan text is returned as
-      the plan body unchanged so the coder still gets a usable spec.
-    * If the plan is empty, the title defaults to ``_DEFAULT_TITLE`` and
+    * Scans the plan for a line matching ``Title: <title>`` (case
+      insensitive, tolerant of leading whitespace, markdown ``#``,
+      missing space before the colon, and surrounding quotes). The
+      first matching line is removed from the plan body.
+    * If a title is found, surrounding whitespace and a single layer
+      of matching quote characters are stripped, and the result is
+      capped at :data:`_MAX_TITLE_LENGTH` characters.
+    * If no ``Title:`` line is found, a title is derived from the
+      user's ``prompt`` via :func:`_derive_title_from_prompt`. The
+      full plan text is returned as the plan body unchanged so the
+      coder still gets a usable spec.
+    * If the plan is empty, the title is derived from ``prompt`` and
       the plan body is the empty string.
 
     Args:
-        plan: Raw planner output, possibly starting with a
+        plan: Raw planner output, possibly containing a
             ``"Title: ..."`` line.
+        prompt: The user's original request prompt, used to derive a
+            fallback title when the planner omits the title directive.
 
     Returns:
         A ``(title, plan_body)`` tuple. ``title`` is always a non-empty
-        string (capped, trimmed, default when missing). ``plan_body`` is
-        the planner output with the title line removed and the
-        surrounding whitespace stripped; if the title line was the only
-        content, this is the empty string.
+        string. ``plan_body`` is the planner output with the title line
+        removed and surrounding whitespace stripped.
     """
-    title = _DEFAULT_TITLE
-    plan_body = plan
-
     if not plan:
-        return title, ""
+        return _derive_title_from_prompt(prompt), ""
 
-    lines = plan.strip().split("\n", 1)
-    first_line = lines[0].strip() if lines else ""
-    if first_line.lower().startswith("title:"):
-        candidate = first_line[len("title:") :].strip()
+    match = _TITLE_LINE_RE.search(plan)
+    if match:
+        # Always remove the matched title line from the plan body so
+        # the coder never receives the directive, even when the title
+        # payload is empty.
+        start, end = match.span()
+        plan_body = (plan[:start] + plan[end:]).strip()
+
+        candidate = match.group(1).strip()
         # Strip a single layer of matching quotes some models add
         # ("Title: \"My App\""). We deliberately don't strip mixed
         # quotes — a leading quote with no matching close is treated as
@@ -168,10 +256,10 @@ def _extract_title(plan: str) -> tuple[str, str]:
             candidate = candidate[1:-1].strip()
         candidate = candidate[:_MAX_TITLE_LENGTH].strip()
         if candidate:
-            title = candidate
-        plan_body = lines[1].strip() if len(lines) > 1 else ""
+            return candidate, plan_body
+        return _derive_title_from_prompt(prompt), plan_body
 
-    return title, plan_body
+    return _derive_title_from_prompt(prompt), plan.strip()
 
 
 @router.post("/api/generate")
@@ -228,11 +316,17 @@ async def generate(
             # surfaced to the frontend as its own SSE event so the
             # TopBar can update immediately, well before the (much
             # larger) code stream finishes.
-            title, plan_body = _extract_title(plan)
+            title, plan_body = _extract_title(plan, request.prompt)
             yield _sse({"type": "title", "content": title})
             yield _sse({"type": "status", "content": "generating"})
+            stripper = StreamingFenceStripper()
             async for chunk in generate_code(plan_body, client, request.model):
-                yield _sse({"type": "code", "content": chunk})
+                clean = stripper.feed(chunk)
+                if clean:
+                    yield _sse({"type": "code", "content": clean})
+            tail = stripper.flush()
+            if tail:
+                yield _sse({"type": "code", "content": tail})
             yield _sse({"type": "done"})
         # Catch broadly: SSE responses can't propagate exceptions to
         # FastAPI's normal error handler (the response is already

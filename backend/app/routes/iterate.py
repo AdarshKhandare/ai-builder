@@ -59,8 +59,9 @@ import time
 from collections.abc import AsyncGenerator
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.coder import CODER_MAX_TOKENS, CODER_SYSTEM_PROMPT, CODER_TEMPERATURE
@@ -73,6 +74,8 @@ from app.routes.deps import (
     check_usage_quota,
     get_current_user,
 )
+from app.routes.projects import _get_owned_project_or_404
+from app.services.code_sanitizer import StreamingFenceStripper
 from app.services.opencode_client import OpenCodeAPIError, OpenCodeClient
 
 logger = logging.getLogger(__name__)
@@ -200,10 +203,21 @@ def _build_iterate_messages(request: IterateRequest) -> list[dict[str, str]]:
 # signature through a ``partial`` object, so the explicit
 # wrapper is the working form.
 async def _iterate_quota(
+    request: IterateRequest,
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> tuple[User, AsyncSession]:
-    """Enforce the per-user iteration daily cap."""
+    """Verify ownership and enforce the daily iteration cap.
+
+    Loads the target project, verifies ownership (404 if not owned),
+    and runs the daily UsageEvent quota check before the route handler
+    streams the response. The per-project iteration counter is bumped
+    atomically inside the route handler so that the daily quota check
+    happens first: if the daily cap is reached the request is rejected
+    without incrementing the project's iteration count.
+    """
+    await _get_owned_project_or_404(db, request.project_id, user.id)
+
     return await check_usage_quota(
         endpoint="iterate",
         daily_limit=DAILY_LIMITS["iterate"],
@@ -218,6 +232,12 @@ async def iterate(
     _quota: Annotated[tuple, Depends(_iterate_quota)],
 ) -> StreamingResponse:
     """Apply a chat-style iteration to the current code and stream the result.
+
+    The dependency resolves ownership and the daily iteration quota
+    before streaming starts. The route then performs an atomic SQL
+    UPDATE that both checks and increments
+    ``project.iteration_count``; concurrent iterates on the same
+    project cannot race past ``settings.ITERATION_LIMIT``.
 
     The event sequence is:
 
@@ -243,6 +263,27 @@ async def iterate(
         (``Cache-Control: no-cache``, ``X-Accel-Buffering: no``,
         ``Connection: keep-alive``).
     """
+    _user, db = _quota
+
+    # Atomic check-and-increment for the per-project iteration cap.
+    # The daily quota has already been checked by the dependency, so
+    # if this UPDATE fails the iteration count is NOT bumped. SQLite
+    # serializes concurrent writers, preventing two simultaneous
+    # requests from both reading the old count and writing the same
+    # new value.
+    result = await db.execute(
+        text(
+            "UPDATE projects SET iteration_count = iteration_count + 1 "
+            "WHERE id = :pid AND iteration_count < :limit"
+        ),
+        {"pid": request.project_id, "limit": settings.ITERATION_LIMIT},
+    )
+    if result.rowcount == 0:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="You've reached the 10-iteration limit for this project.",
+        )
+    await db.commit()
 
     async def event_generator() -> AsyncGenerator[str, None]:
         """Stream SSE frames for a single ``/api/iterate`` request.
@@ -282,6 +323,7 @@ async def iterate(
                 # already-stripped id, so this is a no-op for it.
                 bare_model = _strip_model_prefix(request.model)
 
+                stripper = StreamingFenceStripper()
                 async for chunk in client.stream_chat(
                     messages=messages,
                     model=bare_model,
@@ -294,8 +336,13 @@ async def iterate(
                         # heartbeat that proxies will forward.
                         yield ": keepalive\n\n"
                         last_yield_time = now
-                    yield _sse({"type": "code", "content": chunk})
+                    clean = stripper.feed(chunk)
+                    if clean:
+                        yield _sse({"type": "code", "content": clean})
                     last_yield_time = time.monotonic()
+                tail = stripper.flush()
+                if tail:
+                    yield _sse({"type": "code", "content": tail})
                 yield _sse({"type": "done"})
         # SSE responses cannot propagate Python exceptions to
         # FastAPI's normal error handler (the response is already

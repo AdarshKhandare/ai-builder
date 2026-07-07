@@ -41,7 +41,9 @@ export default defineConfig({
     allowedHosts: [
       "localhost",
       "127.0.0.1",
-      "c5aa-152-56-12-117.ngrok-free.app",
+      "ai-builder-rosy.vercel.app",
+      "ai-builder.adarshweb.in",
+      "0e6d-152-56-12-68.ngrok-free.app",
     ],
   },
   test: {

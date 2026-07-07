@@ -51,6 +51,8 @@ const SAMPLE_PROJECTS: ProjectSummary[] = [
     prompt: 'A simple counter with increment and decrement',
     model: 'opencode-go/minimax-m3',
     created_at: '2026-07-03T10:00:00.000Z',
+    iteration_count: 0,
+    iteration_limit: 10,
   },
   {
     id: 2,
@@ -58,6 +60,8 @@ const SAMPLE_PROJECTS: ProjectSummary[] = [
     prompt: 'A landing page for a small coffee shop with menu and hours',
     model: 'opencode-go/qwen-3-7-plus',
     created_at: '2026-07-02T10:00:00.000Z',
+    iteration_count: 0,
+    iteration_limit: 10,
   },
 ]
 

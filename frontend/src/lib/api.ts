@@ -9,7 +9,9 @@
  * - `GET  /api/models`   — model catalog with full pricing and
  *   metadata. Used by the model picker and the cost estimator.
  * - `POST /api/generate`  — streams a Server-Sent Events (SSE) response
- *   shaped as a sequence of JSON frames:
+ *   shaped as a sequence of JSON frames. May also return a plain
+ *   HTTP 429 with `{"detail": "..."}` JSON when the user is at
+ *   their project cap; in that case there is NO SSE body.
  *
  *       data: {"type":"status","content":"planning"}\n\n
  *       data: {"type":"status","content":"generating"}\n\n
@@ -30,6 +32,8 @@
  *   Note: iterate does NOT emit a `title` event — the project's title
  *   is already set from the first generation. The streamed `code`
  *   events REPLACE the previous code entirely, not append to it.
+ *   May also return a plain HTTP 429 with `{"detail": "..."}` JSON
+ *   when the project is at its iteration cap.
  *
  * In dev, Vite proxies `/api/*` to `http://localhost:8000` (see
  * `vite.config.ts`), and the `API_BASE_URL` constant below is the
@@ -66,12 +70,22 @@ export const API_BASE_URL: string = import.meta.env.VITE_API_URL ?? ""
  *
  * Returned by `GET /api/auth/me`. `null` avatar / `null` email is
  * valid (e.g. when the user's GitHub profile has neither set).
+ *
+ * `lifetime_project_count` and `project_limit` are the abuse-
+ * prevention fields: the backend caps how many projects a user
+ * can create. The frontend uses them to disable the "Generate"
+ * button when the user is at the cap, and to surface the same
+ * 429 message the backend would have returned anyway.
  */
 export interface User {
   id: number
   username: string
   avatar_url: string | null
   email: string | null
+  /** How many projects this user has ever created. */
+  lifetime_project_count: number
+  /** Hard cap on `lifetime_project_count`. */
+  project_limit: number
 }
 
 /**
@@ -154,6 +168,14 @@ export interface IterateRequest {
   /** Conversation history excluding the current `prompt`. The
    *  backend appends the current prompt itself. */
   history: ChatMessage[]
+  /**
+   * ID of the project this iteration belongs to. REQUIRED — the
+   * backend uses it to (a) enforce the per-project iteration cap
+   * (returns 429 when the cap is hit) and (b) persist the
+   * updated code to the right row. The Builder always supplies
+   * this from `currentProjectId`.
+   */
+  project_id: number
   /** OpenCode Go model ID, e.g. `opencode-go/minimax-m3`. */
   model?: string
 }
@@ -218,6 +240,29 @@ export async function getModels(): Promise<ModelInfo[]> {
 /* ------------------------------------------------------------------ */
 
 /**
+ * Read a non-2xx response body as `{ detail: string }` and return the
+ * human-readable detail. Falls back to the `statusText` if the body
+ * is missing, not JSON, or has no `detail` key.
+ *
+ * Used by {@link generateStream} and {@link iterateStream} so a 429
+ * from the backend (e.g. project-cap or iteration-cap) is surfaced
+ * verbatim instead of as a generic `429 Too Many Requests`.
+ */
+async function readErrorDetail(res: Response): Promise<string> {
+  // Copy the body so we can try JSON first, then fall back.
+  try {
+    const cloned = res.clone()
+    const body = (await cloned.json()) as { detail?: unknown }
+    if (typeof body.detail === 'string' && body.detail.length > 0) {
+      return body.detail
+    }
+  } catch {
+    // Body wasn't JSON; fall through to the statusText fallback.
+  }
+  return res.statusText || `HTTP ${res.status}`
+}
+
+/**
  * Stream generated code for a prompt.
  *
  * Yields parsed {@link SSEEvent} frames as they arrive. The
@@ -248,7 +293,13 @@ export async function* generateStream(
   })
 
   if (!res.ok) {
-    throw new Error(`Generate failed: ${res.status} ${res.statusText}`)
+    // For abuse-prevention caps (HTTP 429) the backend returns a
+    // JSON body of the form `{ "detail": "..." }` BEFORE any SSE
+    // stream. Read the detail and surface it verbatim so the user
+    // sees a clear, actionable message instead of a generic
+    // "429 Too Many Requests".
+    const detail = await readErrorDetail(res)
+    throw new Error(detail)
   }
   if (!res.body) {
     throw new Error('Generate failed: response has no body')
@@ -307,11 +358,20 @@ export async function* generateStream(
  * Like `generateStream`, malformed frames are silently skipped and
  * the caller may cancel via the optional `signal`.
  *
+ * When the project is at its iteration cap, the backend returns a
+ * plain HTTP 429 (NOT SSE) with `{"detail": "..."}`. The detail is
+ * surfaced as the thrown `Error.message` so the hook layer can
+ * promote it straight into the user-visible error state.
+ *
  * @param prompt       The follow-up instruction (e.g. "make the hero blue").
  * @param currentCode  The full code currently in the editor. The
  *                     backend will revise against this snapshot.
  * @param history      Chat history up to but not including the current
  *                     prompt. The backend appends the current prompt.
+ * @param projectId    ID of the project this iteration belongs to.
+ *                     REQUIRED — the backend uses it to enforce the
+ *                     per-project iteration cap and to persist the
+ *                     updated code to the right row.
  * @param model        Optional model ID. Defaults to the backend's
  *                     `opencode-go/minimax-m3`.
  * @param signal       Optional `AbortSignal` to cancel the request.
@@ -320,6 +380,7 @@ export async function* iterateStream(
   prompt: string,
   currentCode: string,
   history: ChatMessage[],
+  projectId: number,
   model?: string,
   signal?: AbortSignal,
 ): AsyncGenerator<SSEEvent, void, void> {
@@ -334,13 +395,20 @@ export async function* iterateStream(
       prompt,
       current_code: currentCode,
       history,
+      project_id: projectId,
       model,
     } satisfies IterateRequest),
     signal,
   })
 
   if (!res.ok) {
-    throw new Error(`Iterate failed: ${res.status} ${res.statusText}`)
+    // For abuse-prevention caps (HTTP 429) the backend returns a
+    // JSON body of the form `{ "detail": "..." }` BEFORE any SSE
+    // stream. Read the detail and surface it verbatim so the user
+    // sees a clear, actionable message instead of a generic
+    // "429 Too Many Requests".
+    const detail = await readErrorDetail(res)
+    throw new Error(detail)
   }
   if (!res.body) {
     throw new Error('Iterate failed: response has no body')
@@ -401,6 +469,8 @@ export async function* iterateStream(
 /*                                                                     */
 /* Endpoints:                                                         */
 /*   GET    /api/projects?limit=&offset=    → ProjectSummary[]        */
+/*                                            (with iteration_count,  */
+/*                                             iteration_limit)       */
 /*   GET    /api/projects/{id}              → ProjectFull             */
 /*   POST   /api/projects                   → ProjectFull (201)       */
 /*   PATCH  /api/projects/{id}              → ProjectFull             */
@@ -417,6 +487,17 @@ export interface ProjectSummary {
   model: string
   /** ISO 8601 timestamp. */
   created_at: string
+  /**
+   * Abuse-prevention counters.
+   *  - `iteration_count`  How many iterations the user has already
+   *                        made on this project.
+   *  - `iteration_limit`  Hard cap on `iteration_count`; the
+   *                        backend returns 429 when the cap is hit.
+   * The frontend uses these to disable the "Send" button on the
+   * chat input and surface a friendly limit message inline.
+   */
+  iteration_count: number
+  iteration_limit: number
 }
 
 /** Full project row returned by `GET /api/projects/{id}` and the
@@ -570,7 +651,8 @@ export async function deleteProject(id: number): Promise<void> {
 /* Auth API                                                            */
 /*                                                                     */
 /* Endpoints:                                                         */
-/*   GET   /api/auth/me       → { id, username, avatar_url, email }   */
+/*   GET   /api/auth/me       → { id, username, avatar_url, email,    */
+/*                                lifetime_project_count, project_limit } */
 /*   POST  /api/auth/logout   → 204 (clears the session cookie)       */
 /*                                                                     */
 /* `GET /api/auth/login` and `GET /api/auth/callback` are SERVER-SIDE  */

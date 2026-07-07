@@ -39,7 +39,7 @@ os.environ.setdefault("GITHUB_CLIENT_SECRET", "")
 # ---------------------------------------------------------------------------
 # Third-party imports (after env setup).
 # ---------------------------------------------------------------------------
-from typing import AsyncGenerator  # noqa: E402
+from typing import Any, AsyncGenerator  # noqa: E402
 
 import pytest  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402
@@ -297,3 +297,32 @@ async def auth_client(
     """
     client.cookies.set("forge_token", test_user["token"])
     yield client
+
+
+@pytest.fixture
+async def test_project(auth_client: AsyncClient) -> dict[str, Any]:
+    """Create a single project for the authenticated test user.
+
+    Used by iteration tests that now require a ``project_id`` in
+    the request body. Each test gets a fresh in-memory database, so
+    creating one project here never collides with lifetime/daily caps.
+
+    Args:
+        auth_client: The authenticated ASGI test client.
+
+    Returns:
+        The parsed JSON body of the ``201`` create response.
+    """
+    response = await auth_client.post(
+        "/api/projects",
+        json={
+            "title": "Test Project",
+            "prompt": "A test project for iteration",
+            "code": "<html><body>Test</body></html>",
+            "model": "opencode-go/minimax-m3",
+        },
+    )
+    assert (
+        response.status_code == 201
+    ), f"test_project fixture failed: {response.status_code}: {response.text}"
+    return response.json()

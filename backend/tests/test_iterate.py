@@ -98,6 +98,7 @@ def _patch_opencode_client(
 
 
 def _iterate_payload(
+    project_id: int,
     prompt: str = "add a dark mode toggle",
     current_code: str = "<!DOCTYPE html><html><body><h1>Hi</h1></body></html>",
     model: str = "opencode-go/minimax-m3",
@@ -108,11 +109,16 @@ def _iterate_payload(
     Centralised so each test only specifies the field it actually
     exercises. ``history`` is ``None`` (omitted) by default — the
     schema applies an empty-list default.
+
+    Args:
+        project_id: The id of the project being iterated on. Required
+            since the iteration endpoint enforces a per-project cap.
     """
     body: dict[str, Any] = {
         "prompt": prompt,
         "current_code": current_code,
         "model": model,
+        "project_id": project_id,
     }
     if history is not None:
         body["history"] = history
@@ -126,6 +132,7 @@ def _iterate_payload(
 
 async def test_iterate_streams_code(
     auth_client: AsyncClient,
+    test_project: dict[str, Any],
     mock_client: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -143,7 +150,9 @@ async def test_iterate_streams_code(
     """
     _patch_opencode_client(monkeypatch, mock_client)
 
-    response = await auth_client.post("/api/iterate", json=_iterate_payload())
+    response = await auth_client.post(
+        "/api/iterate", json=_iterate_payload(project_id=test_project["id"])
+    )
 
     assert (
         response.status_code == 200
@@ -168,6 +177,7 @@ async def test_iterate_streams_code(
 
 async def test_iterate_emits_iterating_status(
     auth_client: AsyncClient,
+    test_project: dict[str, Any],
     mock_client: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -184,7 +194,9 @@ async def test_iterate_emits_iterating_status(
     """
     _patch_opencode_client(monkeypatch, mock_client)
 
-    response = await auth_client.post("/api/iterate", json=_iterate_payload())
+    response = await auth_client.post(
+        "/api/iterate", json=_iterate_payload(project_id=test_project["id"])
+    )
     assert response.status_code == 200
 
     events = await _collect_sse_events(response)
@@ -206,7 +218,9 @@ async def test_iterate_emits_iterating_status(
     )
 
 
-async def test_iterate_validates_prompt(auth_client: AsyncClient) -> None:
+async def test_iterate_validates_prompt(
+    auth_client: AsyncClient, test_project: dict[str, Any]
+) -> None:
     """Empty ``prompt`` is rejected with HTTP 422 (Pydantic validation).
 
     The schema declares ``min_length=1`` on ``prompt`` (mirroring
@@ -217,7 +231,10 @@ async def test_iterate_validates_prompt(auth_client: AsyncClient) -> None:
         * HTTP 422 from FastAPI's request validation
         * The error body references the ``prompt`` field
     """
-    response = await auth_client.post("/api/iterate", json=_iterate_payload(prompt=""))
+    response = await auth_client.post(
+        "/api/iterate",
+        json=_iterate_payload(project_id=test_project["id"], prompt=""),
+    )
 
     assert (
         response.status_code == 422
@@ -235,7 +252,9 @@ async def test_iterate_validates_prompt(auth_client: AsyncClient) -> None:
     )
 
 
-async def test_iterate_validates_model(auth_client: AsyncClient) -> None:
+async def test_iterate_validates_model(
+    auth_client: AsyncClient, test_project: dict[str, Any]
+) -> None:
     """Invalid model pattern is rejected with HTTP 422.
 
     The schema enforces ``r"^opencode-go/[a-z0-9._-]+$"`` on
@@ -247,7 +266,8 @@ async def test_iterate_validates_model(auth_client: AsyncClient) -> None:
         * HTTP 422 for an invalid model id
     """
     response = await auth_client.post(
-        "/api/iterate", json=_iterate_payload(model="minimax-m3")
+        "/api/iterate",
+        json=_iterate_payload(project_id=test_project["id"], model="minimax-m3"),
     )
 
     assert response.status_code == 422, (
@@ -263,7 +283,9 @@ async def test_iterate_validates_model(auth_client: AsyncClient) -> None:
     )
 
 
-async def test_iterate_validates_current_code(auth_client: AsyncClient) -> None:
+async def test_iterate_validates_current_code(
+    auth_client: AsyncClient, test_project: dict[str, Any]
+) -> None:
     """Empty ``current_code`` is rejected with HTTP 422.
 
     Iteration without any code to iterate on is meaningless; the
@@ -274,7 +296,8 @@ async def test_iterate_validates_current_code(auth_client: AsyncClient) -> None:
         * HTTP 422 from FastAPI's request validation
     """
     response = await auth_client.post(
-        "/api/iterate", json=_iterate_payload(current_code="")
+        "/api/iterate",
+        json=_iterate_payload(project_id=test_project["id"], current_code=""),
     )
 
     assert response.status_code == 422, (
@@ -292,6 +315,7 @@ async def test_iterate_validates_current_code(auth_client: AsyncClient) -> None:
 
 async def test_iterate_error_handling(
     auth_client: AsyncClient,
+    test_project: dict[str, Any],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Upstream failures surface as a sanitised ``error`` SSE event.
@@ -334,7 +358,9 @@ async def test_iterate_error_handling(
 
     _patch_opencode_client(monkeypatch, error_mock)
 
-    response = await auth_client.post("/api/iterate", json=_iterate_payload())
+    response = await auth_client.post(
+        "/api/iterate", json=_iterate_payload(project_id=test_project["id"])
+    )
 
     # In-band error: status 200, error frame inside the stream.
     if response.status_code != 200:
@@ -367,6 +393,7 @@ async def test_iterate_error_handling(
 
 async def test_iterate_closes_client(
     auth_client: AsyncClient,
+    test_project: dict[str, Any],
     mock_client: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -384,7 +411,9 @@ async def test_iterate_closes_client(
     """
     _patch_opencode_client(monkeypatch, mock_client)
 
-    response = await auth_client.post("/api/iterate", json=_iterate_payload())
+    response = await auth_client.post(
+        "/api/iterate", json=_iterate_payload(project_id=test_project["id"])
+    )
     assert (
         response.status_code == 200
     ), f"Expected 200, got {response.status_code}: {response.text}"
@@ -399,6 +428,7 @@ async def test_iterate_closes_client(
 
 async def test_iterate_includes_history(
     auth_client: AsyncClient,
+    test_project: dict[str, Any],
     mock_client: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -432,7 +462,8 @@ async def test_iterate_includes_history(
     ]
 
     response = await auth_client.post(
-        "/api/iterate", json=_iterate_payload(history=history)
+        "/api/iterate",
+        json=_iterate_payload(project_id=test_project["id"], history=history),
     )
     assert response.status_code == 200
 
@@ -492,6 +523,7 @@ async def test_iterate_includes_history(
 
 async def test_iterate_strips_model_prefix(
     auth_client: AsyncClient,
+    test_project: dict[str, Any],
     mock_client: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -511,7 +543,10 @@ async def test_iterate_strips_model_prefix(
     _patch_opencode_client(monkeypatch, mock_client)
 
     response = await auth_client.post(
-        "/api/iterate", json=_iterate_payload(model="opencode-go/minimax-m3")
+        "/api/iterate",
+        json=_iterate_payload(
+            project_id=test_project["id"], model="opencode-go/minimax-m3"
+        ),
     )
     assert response.status_code == 200
 
@@ -533,6 +568,59 @@ async def test_iterate_strips_model_prefix(
         f"Prefix should be stripped from the model passed to "
         f"stream_chat, got {sent_model!r}"
     )
+
+
+async def test_iterate_strips_code_fences(
+    auth_client: AsyncClient,
+    test_project: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Markdown fences around the iteration output are stripped from SSE code events.
+
+    Mirrors ``test_generate_strips_code_fences`` for the iterate route:
+    the model may wrap the updated HTML in fences, and the route must
+    remove them before streaming the code to the frontend.
+
+    Asserts:
+        * HTTP 200
+        * The concatenated code events contain no backtick fences
+        * The sanitised output starts with ``<!DOCTYPE html>`` and ends
+          with ``</html>``
+    """
+    from unittest.mock import AsyncMock, MagicMock
+
+    fence_mock = MagicMock(name="fence_iterate_client")
+
+    async def _fenced_stream(*_args, **_kwargs):
+        for chunk in ("```html\n", "<!DOCTYPE html>", "<html>", "</html>", "\n```"):
+            yield chunk
+
+    fence_mock.stream_chat = MagicMock(side_effect=_fenced_stream, name="stream_chat")
+    fence_mock.chat = AsyncMock(return_value="unused", name="chat")
+    fence_mock.close = AsyncMock(return_value=None, name="close")
+
+    _patch_opencode_client(monkeypatch, fence_mock)
+
+    response = await auth_client.post(
+        "/api/iterate",
+        json=_iterate_payload(project_id=test_project["id"]),
+    )
+    assert (
+        response.status_code == 200
+    ), f"Expected 200, got {response.status_code}: {response.text}"
+
+    events = await _collect_sse_events(response)
+    code_text = "".join(e.get("content", "") for e in events if e.get("type") == "code")
+
+    assert (
+        "```" not in code_text
+    ), f"Markdown fences must be stripped from iterate code events. Got: {code_text!r}"
+    assert code_text.startswith(
+        "<!DOCTYPE html>"
+    ), f"Sanitised output should start with <!DOCTYPE html>. Got: {code_text!r}"
+    assert code_text.rstrip().endswith(
+        "</html>"
+    ), f"Sanitised output should end with </html>. Got: {code_text!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -576,6 +664,7 @@ def test_iterate_request_history_defaults_to_empty() -> None:
         prompt="add a button",
         current_code="<!DOCTYPE html><html></html>",
         model="opencode-go/minimax-m3",
+        project_id=1,
     )
     assert req.history == []
 
@@ -591,6 +680,7 @@ def test_iterate_request_rejects_too_long_prompt() -> None:
             prompt="x" * 10001,
             current_code="<!DOCTYPE html><html></html>",
             model="opencode-go/minimax-m3",
+            project_id=1,
         )
 
 
@@ -607,4 +697,177 @@ def test_iterate_request_rejects_too_long_history() -> None:
             current_code="<!DOCTYPE html><html></html>",
             model="opencode-go/minimax-m3",
             history=too_many,
+            project_id=1,
         )
+
+
+async def test_iterate_requires_project_id(auth_client: AsyncClient) -> None:
+    """Omitting ``project_id`` returns HTTP 422."""
+    response = await auth_client.post(
+        "/api/iterate",
+        json={
+            "prompt": "change color",
+            "current_code": "<html></html>",
+            "model": "opencode-go/minimax-m3",
+        },
+    )
+    assert response.status_code == 422, (
+        f"Expected 422 for missing project_id, got "
+        f"{response.status_code}: {response.text}"
+    )
+    body = response.json()
+    assert "detail" in body
+    detail_blob = str(body["detail"])
+    assert "project_id" in detail_blob
+
+
+async def test_iterate_404_for_other_users_project(
+    auth_client: AsyncClient,
+    test_user: dict,
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Iterating on a project owned by another user returns 404."""
+    from app.main import app
+    from app.models.database import User, get_db
+    from app.routes.deps import create_access_token
+
+    # Create a project as the test user.
+    create_response = await auth_client.post(
+        "/api/projects",
+        json={
+            "title": "Owned Project",
+            "prompt": "mine",
+            "code": "<html></html>",
+            "model": "opencode-go/minimax-m3",
+        },
+    )
+    assert create_response.status_code == 201
+    project_id = create_response.json()["id"]
+
+    # Create a second user and authenticate the client as them.
+    gen = app.dependency_overrides[get_db]()
+    session = await gen.__anext__()
+    try:
+        other = User(github_id=99999, username="other-user")
+        session.add(other)
+        await session.commit()
+        await session.refresh(other)
+        other_token = create_access_token(
+            sub=str(other.id), extra_claims={"username": other.username}
+        )
+    finally:
+        try:
+            await gen.__anext__()
+        except StopAsyncIteration:
+            pass
+
+    client.cookies.set("forge_token", other_token)
+    response = await client.post(
+        "/api/iterate",
+        json=_iterate_payload(project_id=project_id),
+    )
+    assert response.status_code == 404, (
+        f"Expected 404 for cross-user iterate, got "
+        f"{response.status_code}: {response.text}"
+    )
+    body = response.json()
+    assert body.get("detail") == "Project not found"
+
+
+async def test_iterate_per_project_cap_blocks_after_cap(
+    auth_client: AsyncClient,
+    test_project: dict[str, Any],
+    mock_client: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A project allows ``ITERATION_LIMIT`` iterations, then 429."""
+    from app.config import settings
+
+    _patch_opencode_client(monkeypatch, mock_client)
+
+    cap = settings.ITERATION_LIMIT
+    project_id = test_project["id"]
+
+    for i in range(cap):
+        response = await auth_client.post(
+            "/api/iterate",
+            json=_iterate_payload(
+                project_id=project_id,
+                prompt=f"change {i}",
+                current_code=f"<html>v{i}</html>",
+            ),
+        )
+        assert response.status_code == 200, (
+            f"Expected 200 on iterate #{i + 1}/{cap}, got "
+            f"{response.status_code}: {response.text}"
+        )
+
+    # The (cap+1)th request is blocked by the per-project cap.
+    over_response = await auth_client.post(
+        "/api/iterate",
+        json=_iterate_payload(
+            project_id=project_id,
+            prompt="over the cap",
+            current_code="<html>x</html>",
+        ),
+    )
+    assert over_response.status_code == 429, (
+        f"Expected 429 over per-project cap, got "
+        f"{over_response.status_code}: {over_response.text}"
+    )
+    detail = over_response.json().get("detail")
+    assert (
+        "10-iteration limit" in detail
+    ), f"Expected per-project cap message, got {detail!r}"
+
+
+async def test_iterate_per_project_cap_independent_between_projects(
+    auth_client: AsyncClient,
+    test_project: dict[str, Any],
+    mock_client: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Hitting the cap on one project does not block iterations on another."""
+    from app.config import settings
+
+    _patch_opencode_client(monkeypatch, mock_client)
+
+    # Push the first project to its cap.
+    project_id = test_project["id"]
+    for i in range(settings.ITERATION_LIMIT):
+        response = await auth_client.post(
+            "/api/iterate",
+            json=_iterate_payload(
+                project_id=project_id,
+                prompt=f"change {i}",
+                current_code=f"<html>v{i}</html>",
+            ),
+        )
+        assert response.status_code == 200
+
+    # Create a second project.
+    create_response = await auth_client.post(
+        "/api/projects",
+        json={
+            "title": "Second Project",
+            "prompt": "another project",
+            "code": "<html></html>",
+            "model": "opencode-go/minimax-m3",
+        },
+    )
+    assert create_response.status_code == 201
+    second_project_id = create_response.json()["id"]
+
+    # Iterating on the second project should succeed.
+    response = await auth_client.post(
+        "/api/iterate",
+        json=_iterate_payload(
+            project_id=second_project_id,
+            prompt="first change on second project",
+        ),
+    )
+    assert response.status_code == 200, (
+        f"Expected 200 iterating on second project, got "
+        f"{response.status_code}: {response.text}"
+    )
